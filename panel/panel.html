@@ -7,19 +7,21 @@
 <body>
   <div class="panel">
 
-    <!-- ── Header bar: always visible ─────────────────────────────────────── -->
+    <!-- ── Header ─────────────────────────────────────────────────────────── -->
     <div class="panel-header">
       <span class="panel-title">GSAP Inspector</span>
       <span id="gsap-version-badge" class="badge" style="display:none"></span>
       <span id="webflow-badge" class="badge badge-webflow" style="display:none">Webflow</span>
       <span class="header-spacer"></span>
+      <button id="btn-element-inspector" class="btn btn-icon btn-element-inspector"
+        data-tooltip="Element Inspector: hover animations or ScrollTriggers to highlight their targets on the page. Also works in reverse — hover page elements to find matching animations.">🎯</button>
       <button id="btn-reset" class="btn btn-reset"
         data-tooltip="Kill all GSAP animations, clear saved overrides for this URL, and reload the page. Cannot be undone.">
         Reset &amp; Reload
       </button>
     </div>
 
-    <!-- ── Tab bar ─────────────────────────────────────────────────────────── -->
+    <!-- ── Tab bar ────────────────────────────────────────────────────────── -->
     <div class="tabs" role="tablist">
       <button class="tab active" data-tab="overview"      role="tab" aria-selected="true">Overview</button>
       <button class="tab"        data-tab="animations"    role="tab">Animations</button>
@@ -35,176 +37,158 @@
     <div id="tab-overview" class="tab-content active">
       <div id="gsap-not-found" class="empty-state" style="display:none">
         <p>GSAP not detected on this page.</p>
-        <p class="text-secondary">
-          Open this panel on a page that uses GSAP. If the page has a strict
-          Content Security Policy, script injection may be blocked.
-        </p>
+        <p class="text-secondary">Open this panel on a page that uses GSAP. If the page has a strict Content Security Policy, script injection may be blocked.</p>
       </div>
-
       <div id="overview-content">
         <div class="overview-grid">
-          <div class="overview-card" id="card-version">
-            <div class="card-label"
-              data-tooltip="The version of GSAP (GreenSock Animation Platform) loaded on this page. GSAP 3 (released 2019) has a unified API — gsap.to(), gsap.timeline(), etc. GSAP 2 used separate classes: TweenMax, TimelineMax.">
-              GSAP Version
-            </div>
+          <div class="overview-card">
+            <div class="card-label" data-tooltip="The version of GSAP loaded on this page. GSAP 3 (released 2019) has a unified API — gsap.to(), gsap.timeline(), etc. All plugins are free since Webflow acquired GSAP.">GSAP Version</div>
             <div class="card-value" id="ov-version">—</div>
           </div>
-          <div class="overview-card" id="card-platform">
-            <div class="card-label"
-              data-tooltip="The platform or CMS this site appears to be built on, detected from page globals and data attributes.">
-              Platform
-            </div>
+          <div class="overview-card">
+            <div class="card-label" data-tooltip="The platform or CMS detected from page globals and data attributes.">Platform</div>
             <div class="card-value" id="ov-platform">—</div>
           </div>
-          <div class="overview-card" id="card-anims">
-            <div class="card-label"
-              data-tooltip="Total number of tweens and timelines detected in gsap.globalTimeline — the master timeline that all GSAP animations are children of.">
-              Animations
-            </div>
+          <div class="overview-card">
+            <div class="card-label" data-tooltip="Total tweens and timelines in gsap.globalTimeline — the master timeline all GSAP animations are children of.">Animations</div>
             <div class="card-value" id="ov-anim-count">—</div>
           </div>
-          <div class="overview-card" id="card-sts">
-            <div class="card-label"
-              data-tooltip="ScrollTrigger is a GSAP plugin that links animations to the scroll position. Each 'trigger' is one scroll-linked animation or action.">
-              ScrollTriggers
-            </div>
+          <div class="overview-card">
+            <div class="card-label" data-tooltip="ScrollTrigger instances link animations to scroll position. Each trigger is one scroll-linked animation or action.">ScrollTriggers</div>
             <div class="card-value" id="ov-st-count">—</div>
           </div>
         </div>
-
         <div class="section-header">
           Loaded Plugins
-          <span data-tooltip="GSAP plugins extend the core with additional capabilities. They must be registered with gsap.registerPlugin() before use. Club GSAP plugins (SplitText, MorphSVG, DrawSVG) require a GreenSock membership.">?</span>
+          <span data-tooltip="GSAP plugins extend core functionality. They must be registered with gsap.registerPlugin() before use. All plugins are now free since Webflow acquired GSAP.">?</span>
         </div>
         <div id="ov-plugins" class="plugin-list"></div>
-
         <div id="ix2-warning" class="lint-item lint-warning" style="display:none">
           <strong>Webflow Interactions (ix2) detected alongside GSAP.</strong>
-          Both systems may animate the same elements, causing conflicts. If you see
-          unexpected animation behavior, check whether ix2 and your custom GSAP are
-          targeting the same elements.
+          Both systems may animate the same elements, causing conflicts. Check whether ix2 and your custom GSAP are targeting the same elements.
         </div>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- ANIMATIONS TAB                                                       -->
+    <!-- ANIMATIONS TAB — two-pane layout                                    -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div id="tab-animations" class="tab-content">
+    <div id="tab-animations" class="tab-content two-pane-tab">
 
-      <!-- Global playback controls -->
-      <div class="playback-bar">
-        <span class="playback-label"
-          data-tooltip="Controls GSAP's master timeline — the parent of all animations on the page. Pausing it freezes everything simultaneously.">
-          Global Playback
-        </span>
-        <button id="btn-restart-all" class="btn btn-icon"
-          data-tooltip="Restart all animations from the beginning.">⏮</button>
-        <button id="btn-play-all" class="btn btn-icon"
-          data-tooltip="Resume all paused animations.">▶</button>
-        <button id="btn-pause-all" class="btn btn-icon"
-          data-tooltip="Freeze all animations at their current position.">⏸</button>
-        <button id="btn-reverse-all" class="btn btn-icon"
-          data-tooltip="Play all animations backwards from their current position.">◀</button>
+      <!-- Left pane -->
+      <div class="pane-left">
+        <div class="pane-left-header">
 
-        <span class="speed-label"
-          data-tooltip="timeScale controls how fast GSAP plays animations. 0.5× = half speed (good for debugging). 2× = double speed.">
-          Speed:
-        </span>
-        <div class="speed-btns">
-          <button class="btn speed-btn" data-speed="0.25">0.25×</button>
-          <button class="btn speed-btn" data-speed="0.5">0.5×</button>
-          <button class="btn speed-btn active" data-speed="1">1×</button>
-          <button class="btn speed-btn" data-speed="2">2×</button>
+          <!-- Global playback mini strip -->
+          <div class="global-strip">
+            <span class="global-strip-label" data-tooltip="Controls GSAP's master timeline — pausing it freezes every animation simultaneously.">Global</span>
+            <button id="btn-restart-all" class="btn btn-icon" data-tooltip="Restart all">⏮</button>
+            <button id="btn-play-all"    class="btn btn-icon" data-tooltip="Play all">▶</button>
+            <button id="btn-pause-all"   class="btn btn-icon" data-tooltip="Pause all">⏸</button>
+            <button id="btn-reverse-all" class="btn btn-icon" data-tooltip="Reverse all">◀</button>
+            <div class="speed-btns">
+              <button class="btn speed-btn" data-speed="0.25">¼×</button>
+              <button class="btn speed-btn" data-speed="0.5">½×</button>
+              <button class="btn speed-btn active" data-speed="1">1×</button>
+              <button class="btn speed-btn" data-speed="2">2×</button>
+            </div>
+          </div>
+
+          <!-- View toggle + collapse -->
+          <div class="pane-toolbar">
+            <button class="btn btn-sm view-btn active" id="btn-list-view">List</button>
+            <button class="btn btn-sm view-btn" id="btn-timeline-view">Timeline</button>
+            <span class="toolbar-sep"></span>
+            <button class="btn btn-sm" id="btn-collapse-all" data-tooltip="Collapse all items to show only the first line.">⊟</button>
+            <button class="btn btn-sm" id="btn-expand-all"   data-tooltip="Expand all items to show full controls.">⊞</button>
+          </div>
+
+          <!-- Filter chips -->
+          <div class="filter-bar" id="anim-filter-bar">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="load-in"
+              data-tooltip="Plays once on page load, no repeat. Typical for hero/entrance effects.">Load-in</button>
+            <button class="filter-chip" data-filter="scroll"
+              data-tooltip="Progress tied to scroll position via ScrollTrigger scrub.">Scroll</button>
+            <button class="filter-chip" data-filter="hover"
+              data-tooltip="Paused at progress 0 — the standard pattern for hover-triggered animations.">Hover</button>
+            <button class="filter-chip" data-filter="looping"
+              data-tooltip="repeat: -1 — loops continuously.">Loop</button>
+            <button class="filter-chip" data-filter="paused"
+              data-tooltip="Currently paused.">Paused</button>
+            <button class="filter-chip" data-filter="timelines"
+              data-tooltip="Show only timeline containers.">Timelines</button>
+          </div>
         </div>
 
-        <span class="scrub-label"
-          data-tooltip="Drag to scrub through the master timeline. Sets gsap.globalTimeline.progress() from 0 (start) to 1 (end).">
-          Scrub:
-        </span>
-        <input type="range" id="global-scrub" min="0" max="1" step="0.01" value="0"
-          class="scrub-range">
+        <!-- List view -->
+        <div id="anim-list-view" class="pane-list-wrap">
+          <div id="anim-list" class="pane-list"></div>
+        </div>
+
+        <!-- Timeline / Gantt view -->
+        <div id="anim-timeline-view" class="pane-list-wrap" style="display:none">
+          <div id="timeline-container" class="tl-container"></div>
+        </div>
       </div>
 
-      <!-- List / Timeline view toggle + collapse controls -->
-      <div class="view-toggle">
-        <button class="btn view-btn active" id="btn-list-view">List</button>
-        <button class="btn view-btn" id="btn-timeline-view">Timeline</button>
-        <span class="view-toggle-sep"></span>
-        <button class="btn btn-sm" id="btn-collapse-all"
-          data-tooltip="Collapse all animation cards to show only the top row. Good for scanning a long list quickly.">Collapse all</button>
-        <button class="btn btn-sm" id="btn-expand-all"
-          data-tooltip="Expand all animation cards to show their playback controls.">Expand all</button>
-      </div>
-
-      <!-- Animation filters -->
-      <div class="filter-bar" id="anim-filter-bar">
-        <span class="filter-label" data-tooltip="Filter the animation list to focus on what you need.">Filter:</span>
-        <button class="filter-chip active" data-filter="all">All</button>
-        <button class="filter-chip" data-filter="load-in"
-          data-tooltip="Animations that play once on page load and don't repeat. Typically used for hero sections and entrance effects.">Load-in</button>
-        <button class="filter-chip" data-filter="scroll"
-          data-tooltip="Animations whose progress is tied to the scroll position via ScrollTrigger's scrub option.">Scroll-linked</button>
-        <button class="filter-chip" data-filter="looping"
-          data-tooltip="Animations set to repeat indefinitely (repeat: -1). These loop continuously without stopping.">Looping</button>
-        <button class="filter-chip" data-filter="hover"
-          data-tooltip="Animations that start paused at progress 0 — the standard GSAP pattern for hover-triggered animations (created paused, then played on mouseenter).">Hover</button>
-        <button class="filter-chip" data-filter="paused"
-          data-tooltip="Animations currently in a paused state. These may be waiting to be triggered or were manually paused.">Paused</button>
-        <button class="filter-chip" data-filter="timelines"
-          data-tooltip="Show only timeline containers — these group multiple tweens together so they can be controlled as one unit.">Timelines</button>
-      </div>
-
-      <!-- List view -->
-      <div id="anim-list-view">
-        <div id="anim-list" class="anim-list"></div>
-      </div>
-
-      <!-- Timeline / Gantt view -->
-      <div id="anim-timeline-view" style="display:none">
-        <div id="timeline-container" class="tl-container"></div>
+      <!-- Right pane -->
+      <div class="pane-right">
+        <div id="anim-detail" class="detail-panel">
+          <div class="detail-empty">
+            <div class="detail-empty-icon">▶</div>
+            <p>Select an animation from the list</p>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- SCROLLTRIGGER TAB                                                    -->
+    <!-- SCROLLTRIGGER TAB — two-pane layout                                 -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div id="tab-scrolltrigger" class="tab-content">
-      <div class="st-header">
-        <span class="section-header">ScrollTrigger Instances</span>
-        <label class="toggle-row"
-          data-tooltip="Shows visual marker lines on the page indicating where each ScrollTrigger starts and ends. Extremely helpful for debugging scroll positions. Note: toggling markers requires killing and recreating triggers, which briefly interrupts animations.">
-          All Markers
-          <span class="toggle-switch">
-            <input type="checkbox" id="markers-all">
-            <span class="toggle-slider"></span>
-          </span>
-        </label>
-        <button id="btn-st-refresh" class="btn"
-          data-tooltip="Calls ScrollTrigger.refresh() — recalculates all trigger positions. Use this after the page layout changes (images load, accordions open, etc.).">
-          Refresh All
-        </button>
+    <div id="tab-scrolltrigger" class="tab-content two-pane-tab">
+
+      <!-- Left pane -->
+      <div class="pane-left">
+        <div class="pane-left-header">
+          <div class="pane-toolbar">
+            <span class="section-header" style="margin:0;flex:1">ScrollTrigger</span>
+            <label class="toggle-row" data-tooltip="Toggle debug marker lines for all triggers simultaneously.">
+              All Markers
+              <span class="toggle-switch">
+                <input type="checkbox" id="markers-all">
+                <span class="toggle-slider"></span>
+              </span>
+            </label>
+            <button id="btn-st-refresh" class="btn btn-sm" data-tooltip="Recalculate all trigger positions after layout changes.">Refresh</button>
+          </div>
+          <div class="filter-bar" id="st-filter-bar">
+            <button class="filter-chip active" data-filter="all">All</button>
+            <button class="filter-chip" data-filter="scrub"
+              data-tooltip="Animation progress tied directly to scroll position.">Scrub</button>
+            <button class="filter-chip" data-filter="one-shot"
+              data-tooltip="Fires once when scrolled into view.">One-shot</button>
+            <button class="filter-chip" data-filter="pinned"
+              data-tooltip="Pins an element while scrolling past it.">Pinned</button>
+            <button class="filter-chip" data-filter="active"
+              data-tooltip="Currently in the active scroll range.">Active</button>
+          </div>
+        </div>
+
+        <div class="pane-list-wrap">
+          <div id="st-list" class="pane-list">
+            <div class="empty-state">No ScrollTrigger instances detected.</div>
+          </div>
+        </div>
       </div>
 
-      <!-- ScrollTrigger filters -->
-      <div class="filter-bar" id="st-filter-bar">
-        <span class="filter-label" data-tooltip="Filter the ScrollTrigger list.">Filter:</span>
-        <button class="filter-chip active" data-filter="all">All</button>
-        <button class="filter-chip" data-filter="scrub"
-          data-tooltip="Triggers where animation progress is directly tied to scroll position. The animation plays forwards and backwards as you scroll.">Scrub</button>
-        <button class="filter-chip" data-filter="one-shot"
-          data-tooltip="Triggers that fire an animation once when scrolled into view, like a play button activated by scroll position.">One-shot</button>
-        <button class="filter-chip" data-filter="pinned"
-          data-tooltip="Triggers that pin (stick) an element to the viewport while the user scrolls past it, creating a sticky scroll effect.">Pinned</button>
-        <button class="filter-chip" data-filter="active"
-          data-tooltip="Triggers where the current scroll position is inside the trigger's start/end range right now.">Active now</button>
-      </div>
-
-      <div id="st-list" class="st-list">
-        <div class="empty-state">
-          No ScrollTrigger instances detected. ScrollTrigger must be loaded and
-          registered to appear here.
+      <!-- Right pane -->
+      <div class="pane-right">
+        <div id="st-detail" class="detail-panel">
+          <div class="detail-empty">
+            <div class="detail-empty-icon">⟳</div>
+            <p>Select a ScrollTrigger from the list</p>
+          </div>
         </div>
       </div>
     </div>
@@ -216,14 +200,10 @@
       <div class="lint-header">
         <span class="section-header">GSAP Linter</span>
         <button id="btn-lint-run" class="btn btn-primary"
-          data-tooltip="Re-scans the page and runs all linting rules against the current state of GSAP animations.">
-          Re-run
-        </button>
+          data-tooltip="Re-scan the page and run all linting rules.">Re-run</button>
       </div>
       <div id="lint-results" class="lint-results">
-        <div class="empty-state">
-          Linter will run automatically when GSAP is detected.
-        </div>
+        <div class="empty-state">Linter runs automatically when GSAP is detected.</div>
       </div>
     </div>
 
@@ -231,51 +211,34 @@
     <!-- CODE TAB                                                             -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <div id="tab-code" class="tab-content">
-
       <div class="code-section">
         <div class="section-header">
           JavaScript
-          <span data-tooltip="Code entered here runs directly in the page's JavaScript context — the same scope as window.gsap, window.ScrollTrigger, etc. It has full access to all GSAP globals.">?</span>
+          <span data-tooltip="Runs directly in the page's JS context — same scope as window.gsap, ScrollTrigger, etc.">?</span>
         </div>
         <textarea id="js-editor" class="code-editor"
-          placeholder="// Type any GSAP JavaScript here&#10;// e.g. gsap.to('.box', { x: 100, duration: 1 })&#10;// All globals (gsap, ScrollTrigger, etc.) are available"></textarea>
+          placeholder="// gsap.to('.box', { x: 100, duration: 1 })"></textarea>
         <div class="code-actions">
-          <button id="btn-inject-js" class="btn btn-primary"
-            data-tooltip="Executes the JavaScript above in the page context immediately.">
-            Inject &amp; Run
-          </button>
-          <button id="btn-save-js" class="btn"
-            data-tooltip="Saves this code to run automatically every time you visit this URL. Saved code runs after GSAP loads on the page.">
-            Save for this URL
-          </button>
-          <button id="btn-copy-webflow" class="btn"
-            data-tooltip="Copies the code wrapped in &lt;script&gt; tags, formatted for pasting into Webflow's Page Settings → Custom Code → Before &lt;/body&gt; section.">
-            Copy as Webflow Snippet
-          </button>
+          <button id="btn-inject-js"    class="btn btn-primary" data-tooltip="Execute in page context immediately.">Inject &amp; Run</button>
+          <button id="btn-save-js"      class="btn"             data-tooltip="Auto-run on every visit to this URL after GSAP loads.">Save for URL</button>
+          <button id="btn-copy-webflow" class="btn"             data-tooltip="Wrap in &lt;script&gt; tags for Webflow's custom code panel.">Copy as Webflow Snippet</button>
         </div>
         <div id="js-inject-result" class="inject-result" style="display:none"></div>
       </div>
-
       <div class="code-section">
-        <div class="section-header">
-          CSS
-          <span data-tooltip="Injects a &lt;style&gt; tag into the page. Useful for overriding styles on animated elements, adding will-change, or debugging layout issues. Injected styles are tagged with data-gsap-inspector so they can be removed by the Reset button.">?</span>
-        </div>
-        <textarea id="css-editor" class="code-editor code-editor-sm"
-          placeholder="/* Type CSS here */&#10;/* e.g. .hero { will-change: transform; } */"></textarea>
+        <div class="section-header">CSS <span data-tooltip="Injects a &lt;style&gt; tag. Tagged data-gsap-inspector so Reset button can remove it.">?</span></div>
+        <textarea id="css-editor" class="code-editor code-editor-sm" placeholder="/* .hero { will-change: transform; } */"></textarea>
         <div class="code-actions">
           <button id="btn-inject-css" class="btn btn-primary">Inject CSS</button>
         </div>
         <div id="css-inject-result" class="inject-result" style="display:none"></div>
       </div>
-
       <div class="code-section">
         <div class="section-header">Session History</div>
         <div id="inject-history" class="inject-history">
           <div class="empty-state">No code injected this session.</div>
         </div>
       </div>
-
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -284,31 +247,22 @@
     <div id="tab-overrides" class="tab-content">
       <div class="overrides-header">
         <span class="section-header">Saved Overrides</span>
-        <button id="btn-export-overrides" class="btn"
-          data-tooltip="Download all saved overrides as a JSON file. Share with teammates or back up your work.">
-          Export All
-        </button>
-        <button id="btn-clear-all-overrides" class="btn btn-danger"
-          data-tooltip="Delete ALL saved overrides for ALL URLs. This cannot be undone.">
-          Clear All
-        </button>
+        <button id="btn-export-overrides"    class="btn"        data-tooltip="Download as JSON.">Export All</button>
+        <button id="btn-clear-all-overrides" class="btn btn-danger" data-tooltip="Delete all saved overrides for all URLs.">Clear All</button>
       </div>
       <div id="overrides-list" class="overrides-list">
-        <div class="empty-state">
-          No saved overrides yet. Use the Code tab to inject and save JavaScript
-          for any URL.
-        </div>
+        <div class="empty-state">No saved overrides yet.</div>
       </div>
     </div>
 
   </div><!-- /.panel -->
 
-  <!-- ── Property editor modal ──────────────────────────────────────────── -->
+  <!-- ── Property editor modal ─────────────────────────────────────────── -->
   <div id="prop-editor-modal" class="modal" style="display:none">
     <div class="modal-content">
       <div class="modal-header">
         <span id="modal-title">Edit Tween</span>
-        <button id="modal-close" class="btn btn-icon" title="Close">✕</button>
+        <button id="modal-close" class="btn btn-icon">✕</button>
       </div>
       <div id="prop-editor" class="prop-editor"></div>
       <div class="modal-actions">

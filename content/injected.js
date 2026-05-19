@@ -200,6 +200,7 @@
         snap: st.vars && st.vars.snap ? st.vars.snap : false,
         toggleActions: (st.vars && st.vars.toggleActions) || 'play none none none',
         invalidateOnRefresh: !!(st.vars && st.vars.invalidateOnRefresh),
+        linkedAnimId: (st.animation && st.animation._gsapInspectorId) ? st.animation._gsapInspectorId : null,
       };
     });
   }

@@ -1,67 +1,44 @@
-// panel.js — Main logic for the GSAP Inspector DevTools panel.
-// Loaded as an ES module from panel.html.
+// panel.js — GSAP Inspector DevTools panel — two-pane edition.
+// ES module loaded from panel.html.
 
 import { TimelineView } from './timeline-view.js';
-import { runLinter } from '../rules/gsap-linter.js';
+import { runLinter }    from '../rules/gsap-linter.js';
 
-// ── Connection setup ──────────────────────────────────────────────────────────
+// ── Connection ────────────────────────────────────────────────────────────────
 const port = chrome.runtime.connect({ name: 'gsap-inspector-devtools' });
-port.postMessage({
-  type: 'devtools_connect',
-  tabId: chrome.devtools.inspectedWindow.tabId,
-});
+port.postMessage({ type: 'devtools_connect', tabId: chrome.devtools.inspectedWindow.tabId });
 
-let lastData = null;
-let timelineView = null;
-let currentView = 'list';
-
-// Stable ordering for ScrollTrigger list (preserves order when markers toggled)
-let stOrderIds = [];
-
-// Diff tracking for animation list (prevents flicker on 500ms poll)
-const animItemMap = new Map();
-let lastAnimIds = '';
-
-// Active filters
-let animFilter = 'all';
-let stFilter   = 'all';
-
-// Element inspector state
+// ── State ─────────────────────────────────────────────────────────────────────
+let lastData             = null;
+let timelineView         = null;
+let currentView          = 'list';
+let stOrderIds           = [];
+const animItemMap        = new Map();
+const stItemMap          = new Map();
+let lastAnimIds          = '';
+let lastStIds            = '';
+let animFilter           = 'all';
+let stFilter             = 'all';
 let elementInspectorActive = false;
+let selectedAnimId       = null;
+let selectedStId         = null;
 
+// ── Message handling ──────────────────────────────────────────────────────────
 port.onMessage.addListener((msg) => {
   switch (msg.type) {
-    case 'inspection_data':
-      handleInspectionData(msg.payload);
-      break;
-    case 'gsap_not_found':
-      showNotFound();
-      break;
-    case 'inject_result':
-      showInjectResult(msg);
-      break;
+    case 'inspection_data':   handleInspectionData(msg.payload);  break;
+    case 'gsap_not_found':    showNotFound();                      break;
+    case 'inject_result':     showInjectResult(msg);               break;
     case 'reset_complete':
-      setTimeout(() => {
-        chrome.devtools.inspectedWindow.eval('window.location.reload()');
-      }, 300);
+      setTimeout(() => chrome.devtools.inspectedWindow.eval('window.location.reload()'), 300);
       break;
-    // Reverse element inspector: page hovered element matched animations/STs
-    case 'reverse_highlight': {
-      highlightPanelRows(msg.animIds || [], msg.stIds || []);
-      break;
-    }
-    case 'reverse_unhighlight': {
-      clearPanelHighlights();
-      break;
-    }
-    default:
-      break;
+    case 'reverse_highlight':   highlightPanelRows(msg.animIds || [], msg.stIds || []); break;
+    case 'reverse_unhighlight': clearPanelHighlights(); break;
+    default: break;
   }
 });
 
-// ── JS Tooltip system ─────────────────────────────────────────────────────────
-// Fixed-position tooltip that escapes overflow:hidden containers and auto-flips
-// at viewport edges.
+// ── JS Tooltip (fixed-position, escapes overflow:hidden) ─────────────────────
 const tip = document.createElement('div');
 tip.id = 'gsap-tip';
 document.body.appendChild(tip);
@@ -79,65 +56,40 @@ document.addEventListener('mouseover', (e) => {
 document.addEventListener('mouseout', (e) => {
   const host = e.target.closest('[data-tooltip]');
   if (!host) return;
-  if (!host.contains(e.relatedTarget)) {
-    tip.style.display = 'none';
-  }
+  if (!host.contains(e.relatedTarget)) tip.style.display = 'none';
 });
 
 function positionTip(host) {
   const rect = host.getBoundingClientRect();
-  const tw = tip.offsetWidth;
-  const th = tip.offsetHeight;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  const vw = window.innerWidth,  vh = window.innerHeight;
   const M = 8;
-
-  let top = rect.top - th - M;
-
-  // For wide elements (flex:1 spans, labels) anchor near the left edge
-  // where the text actually starts, not the centre of the empty space.
-  let left;
-  if (rect.width > 200) {
-    left = rect.left + M;
-  } else {
-    left = rect.left + rect.width / 2 - tw / 2;
-  }
-
-  // Flip below if not enough room above
+  let top  = rect.top - th - M;
+  let left = rect.width > 200 ? rect.left + M : rect.left + rect.width / 2 - tw / 2;
   if (top < M) top = rect.bottom + M;
-
-  // Clamp within viewport
   if (left < M) left = M;
   if (left + tw > vw - M) left = vw - tw - M;
   if (top < M) top = M;
   if (top + th > vh - M) top = vh - th - M;
-
-  tip.style.top = top + 'px';
+  tip.style.top  = top  + 'px';
   tip.style.left = left + 'px';
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((t) => {
-      t.classList.remove('active');
-      t.setAttribute('aria-selected', 'false');
-    });
-    document.querySelectorAll('.tab-content').forEach((c) =>
-      c.classList.remove('active')
-    );
-    tab.classList.add('active');
-    tab.setAttribute('aria-selected', 'true');
-    const panel = document.getElementById(`tab-${tab.dataset.tab}`);
-    if (panel) panel.classList.add('active');
-
-    if (tab.dataset.tab === 'animations' && currentView === 'timeline' && lastData)
-      renderTimelineView(lastData);
-    if (tab.dataset.tab === 'linter' && lastData)
-      renderLinter(lastData);
-    if (tab.dataset.tab === 'overrides')
-      renderOverrides();
+function switchToTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === name);
+    t.setAttribute('aria-selected', String(t.dataset.tab === name));
   });
+  document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
+  document.getElementById(`tab-${name}`)?.classList.add('active');
+  if (name === 'animations' && currentView === 'timeline' && lastData) renderTimelineView(lastData);
+  if (name === 'linter'     && lastData)  renderLinter(lastData);
+  if (name === 'overrides')               renderOverrides();
+}
+
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => switchToTab(tab.dataset.tab));
 });
 
 // ── View toggle (List / Timeline) ─────────────────────────────────────────────
@@ -145,7 +97,7 @@ document.getElementById('btn-list-view').addEventListener('click', () => {
   currentView = 'list';
   document.getElementById('btn-list-view').classList.add('active');
   document.getElementById('btn-timeline-view').classList.remove('active');
-  document.getElementById('anim-list-view').style.display = '';
+  document.getElementById('anim-list-view').style.display   = '';
   document.getElementById('anim-timeline-view').style.display = 'none';
 });
 
@@ -153,7 +105,7 @@ document.getElementById('btn-timeline-view').addEventListener('click', () => {
   currentView = 'timeline';
   document.getElementById('btn-timeline-view').classList.add('active');
   document.getElementById('btn-list-view').classList.remove('active');
-  document.getElementById('anim-list-view').style.display = 'none';
+  document.getElementById('anim-list-view').style.display   = 'none';
   document.getElementById('anim-timeline-view').style.display = '';
   if (lastData) renderTimelineView(lastData);
 });
@@ -178,21 +130,11 @@ document.querySelectorAll('#st-filter-bar .filter-chip').forEach((chip) => {
   });
 });
 
-// ── Element inspector toggle ──────────────────────────────────────────────────
-const inspectorBtn = document.createElement('button');
-inspectorBtn.id = 'btn-element-inspector';
-inspectorBtn.className = 'btn btn-icon btn-element-inspector';
-inspectorBtn.title = 'Element Inspector';
-inspectorBtn.dataset.tooltip =
-  'Element Inspector: when active, hover over any animation or ScrollTrigger row to highlight its target element on the page — similar to the DevTools element picker.';
-inspectorBtn.textContent = '🎯';
-const resetBtn = document.getElementById('btn-reset');
-resetBtn.parentNode.insertBefore(inspectorBtn, resetBtn);
-
+// ── Element inspector ─────────────────────────────────────────────────────────
+const inspectorBtn = document.getElementById('btn-element-inspector');
 inspectorBtn.addEventListener('click', () => {
   elementInspectorActive = !elementInspectorActive;
   inspectorBtn.classList.toggle('active', elementInspectorActive);
-  // Tell injected.js to start/stop listening for page mouseover events
   sendCommand({ command: 'set_reverse_inspector', active: elementInspectorActive });
   if (!elementInspectorActive) {
     sendCommand({ command: 'unhighlight_element' });
@@ -200,18 +142,33 @@ inspectorBtn.addEventListener('click', () => {
   }
 });
 
-// ── Data rendering ────────────────────────────────────────────────────────────
+// ── Selection ─────────────────────────────────────────────────────────────────
+function selectAnim(id) {
+  selectedAnimId = id;
+  document.querySelectorAll('#anim-list .list-item').forEach((el) => {
+    el.classList.toggle('selected', el.dataset.id === id);
+  });
+  if (id && lastData) renderAnimDetail(id);
+}
+
+function selectSt(id) {
+  selectedStId = id;
+  document.querySelectorAll('#st-list .list-item').forEach((el) => {
+    el.classList.toggle('selected', el.dataset.id === id);
+  });
+  if (id && lastData) renderStDetail(id);
+}
+
+// ── Main data entry point ─────────────────────────────────────────────────────
 function handleInspectionData(data) {
   lastData = data;
   document.getElementById('gsap-not-found').style.display = 'none';
   document.getElementById('overview-content').style.display = '';
-
   renderOverview(data);
   renderAnimations(data);
   renderScrollTriggers(data);
-
   const linterTab = document.querySelector('.tab[data-tab="linter"]');
-  if (linterTab && linterTab.classList.contains('active')) renderLinter(data);
+  if (linterTab?.classList.contains('active')) renderLinter(data);
 }
 
 function showNotFound() {
@@ -221,34 +178,29 @@ function showNotFound() {
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
 function renderOverview(data) {
-  const versionBadge = document.getElementById('gsap-version-badge');
+  const vBadge = document.getElementById('gsap-version-badge');
   if (data.version) {
-    versionBadge.textContent = `GSAP ${data.version}`;
-    versionBadge.style.display = '';
-    versionBadge.className = `badge ${data.isGSAP3 ? 'badge-gsap3' : 'badge-gsap2'}`;
+    vBadge.textContent = `GSAP ${data.version}`;
+    vBadge.style.display = '';
+    vBadge.className = `badge ${data.isGSAP3 ? 'badge-gsap3' : 'badge-gsap2'}`;
   } else {
-    versionBadge.style.display = 'none';
+    vBadge.style.display = 'none';
   }
-
-  document.getElementById('ov-version').textContent = data.version || 'Unknown';
-  document.getElementById('ov-platform').textContent = data.isWebflow ? 'Webflow' : 'Custom site';
+  document.getElementById('ov-version').textContent   = data.version || 'Unknown';
+  document.getElementById('ov-platform').textContent  = data.isWebflow ? 'Webflow' : 'Custom site';
   document.getElementById('webflow-badge').style.display = data.isWebflow ? '' : 'none';
   document.getElementById('ov-anim-count').textContent = data.animations.length;
-  document.getElementById('ov-st-count').textContent = data.scrollTriggers.length;
+  document.getElementById('ov-st-count').textContent   = data.scrollTriggers.length;
 
   const pluginList = document.getElementById('ov-plugins');
-  if (!data.plugins || !data.plugins.length) {
-    pluginList.innerHTML =
-      '<span class="text-secondary">No plugins detected (core GSAP only)</span>';
+  if (!data.plugins?.length) {
+    pluginList.innerHTML = '<span class="text-secondary">No plugins detected (core GSAP only)</span>';
   } else {
-    pluginList.innerHTML = data.plugins
-      .map((p) => {
-        const tip = PLUGIN_TOOLTIPS[p] || `${p} plugin`;
-        return `<span class="badge badge-plugin" data-tooltip="${escapeAttr(tip)}">${escapeHtml(p)}</span>`;
-      })
-      .join('');
+    pluginList.innerHTML = data.plugins.map((p) => {
+      const t = PLUGIN_TOOLTIPS[p] || `${p} plugin`;
+      return `<span class="badge badge-plugin" data-tooltip="${escapeAttr(t)}">${escapeHtml(p)}</span>`;
+    }).join('');
   }
-
   document.getElementById('ix2-warning').style.display = data.hasIx2 ? '' : 'none';
 }
 
@@ -268,49 +220,39 @@ const PLUGIN_TOOLTIPS = {
   PixiPlugin:       'Integrates with PixiJS for WebGL-accelerated animations.',
 };
 
-// ── Animations tab — diff-based rendering to prevent flicker ─────────────────
+// ── Filter helpers ────────────────────────────────────────────────────────────
 function applyAnimFilter(anims) {
   switch (animFilter) {
-    case 'load-in':
-      return anims.filter((a) => !a.isScrollLinked && a.repeat !== -1 && a.type === 'tween');
-    case 'scroll':
-      return anims.filter((a) => a.isScrollLinked);
-    case 'looping':
-      return anims.filter((a) => a.repeat === -1);
-    case 'hover':
-      // Standard GSAP hover pattern: created paused, not yet played (progress 0)
-      return anims.filter((a) => a.paused && a.progress === 0 && a.repeat !== -1);
-    case 'paused':
-      return anims.filter((a) => a.paused);
-    case 'timelines':
-      return anims.filter((a) => a.type === 'timeline');
-    default:
-      return anims;
+    case 'load-in':   return anims.filter((a) => !a.isScrollLinked && a.repeat !== -1 && a.type === 'tween');
+    case 'scroll':    return anims.filter((a) => a.isScrollLinked);
+    case 'looping':   return anims.filter((a) => a.repeat === -1);
+    case 'hover':     return anims.filter((a) => a.paused && a.progress === 0 && a.repeat !== -1);
+    case 'paused':    return anims.filter((a) => a.paused);
+    case 'timelines': return anims.filter((a) => a.type === 'timeline');
+    default:          return anims;
   }
 }
 
-// ── Collapse / Expand all ─────────────────────────────────────────────────────
-document.getElementById('btn-collapse-all').addEventListener('click', () => {
-  document.querySelectorAll('#anim-list .anim-item, #anim-list .anim-child-item').forEach((el) =>
-    el.classList.add('collapsed')
-  );
-});
+function applyStFilter(sts) {
+  switch (stFilter) {
+    case 'scrub':    return sts.filter((st) => st.scrub !== false);
+    case 'one-shot': return sts.filter((st) => st.scrub === false);
+    case 'pinned':   return sts.filter((st) => st.pin);
+    case 'active':   return sts.filter((st) => st.isActive);
+    default:         return sts;
+  }
+}
 
-document.getElementById('btn-expand-all').addEventListener('click', () => {
-  document.querySelectorAll('#anim-list .anim-item, #anim-list .anim-child-item').forEach((el) =>
-    el.classList.remove('collapsed')
-  );
-});
-
+// ── Animation left pane ───────────────────────────────────────────────────────
 function renderAnimations(data) {
-  const list = document.getElementById('anim-list');
+  const list     = document.getElementById('anim-list');
   const topLevel = data.animations.filter((a) => a.depth <= 1);
   const filtered = applyAnimFilter(topLevel);
 
   if (!filtered.length) {
     const msg = topLevel.length
       ? `No animations match the "${animFilter}" filter.`
-      : 'No animations detected. GSAP animations will appear here once they are created.';
+      : 'No animations detected. GSAP animations appear here once created.';
     if (list.querySelector('.empty-state')?.textContent !== msg) {
       list.innerHTML = `<div class="empty-state">${msg}</div>`;
       animItemMap.clear();
@@ -321,147 +263,54 @@ function renderAnimations(data) {
   }
 
   const newIds = filtered.map((a) => a.id).join(',');
-
   if (newIds !== lastAnimIds) {
     lastAnimIds = newIds;
     list.innerHTML = '';
     animItemMap.clear();
     filtered.forEach((anim) => {
-      const item = buildAnimItem(anim, data.animations);
+      const item = buildListItem(anim);
       animItemMap.set(anim.id, item);
       list.appendChild(item);
     });
+    if (selectedAnimId) {
+      animItemMap.get(selectedAnimId)?.classList.add('selected');
+    }
   } else {
-    // Patch top-level items and any visible child items
-    data.animations.forEach((anim) => patchAnimItem(anim, animItemMap.get(anim.id)));
+    filtered.forEach((anim) => patchListItem(anim, animItemMap.get(anim.id)));
   }
 
+  if (selectedAnimId) patchAnimDetail();
   if (currentView === 'timeline') renderTimelineView(data);
 }
 
-function buildAnimItem(anim, allAnimations) {
+function buildListItem(anim) {
   const item = document.createElement('div');
-  item.className = 'anim-item';
+  item.className  = 'list-item';
   item.dataset.id = anim.id;
 
-  const stateClass = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
-  const stateLabel = anim.paused ? 'Paused' : anim.progress >= 1 ? 'Complete' : 'Playing';
-  const scrollTag = anim.isScrollLinked
-    ? `<span class="badge badge-scroll" data-tooltip="This animation's progress is controlled by scroll position, not clock time.">scroll</span>`
+  const cls   = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
+  const label = anim.paused ? 'Paused'     : anim.progress >= 1 ? 'Complete'     : 'Playing';
+  const scroll = anim.isScrollLinked
+    ? `<span class="badge badge-scroll" style="font-size:9px;padding:0 5px" data-tooltip="Progress is controlled by scroll position.">scroll</span>`
     : '';
-  const typeTag = `<span class="anim-type-tag ${anim.type}"
-    data-tooltip="${anim.type === 'timeline'
-      ? 'A timeline is a container that groups multiple tweens together. You can control all of them at once — play, pause, reverse, or scrub the whole sequence with a single handle.'
-      : 'A tween is a single animation instruction — it moves one or more elements from one state to another over a set duration.'
-    }">${anim.type}</span>`;
-
-  const animatedProps = Object.keys(anim.vars)
-    .filter((k) => !['ease', 'duration', 'delay', 'repeat', 'yoyo', 'stagger'].includes(k));
-  const propSummary = animatedProps.join(', ');
-  const propDisplay = propSummary || 'no props';
-  const propTooltip = propSummary
-    ? `Animated CSS/transform properties: ${propSummary}. These are the values GSAP is changing on this element.`
-    : (anim.type === 'timeline'
-        ? 'This is a timeline container — it groups tweens but does not animate properties directly.'
-        : 'No standard animated properties detected. This tween may be animating plugin-specific values (e.g. DrawSVG, MotionPath) or CSS custom properties not in the standard list.');
-
-  const targetTooltip = anim.targetSelector
-    ? `The CSS selector of the element(s) being animated.`
-    : `Anonymous target — either the element has no id or class to identify it by, or this animation targets a plain JavaScript object rather than a DOM element.`;
 
   item.innerHTML = `
-    <div class="anim-row-top">
-      <span class="dot ${stateClass}" data-tooltip="Animation state: ${stateLabel}"></span>
-      ${typeTag}
-      <span class="anim-target" data-tooltip="${escapeAttr(targetTooltip)}">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
-      ${scrollTag}
-      <span class="anim-props text-secondary" data-tooltip="${escapeAttr(propTooltip)}">${escapeHtml(propDisplay)}</span>
-      <span class="anim-duration text-secondary"
-        data-tooltip="Total duration of this animation in seconds. Does not apply to scroll-linked animations."
-        >${anim.duration.toFixed(2)}s</span>
-      <span class="anim-ease text-secondary"
-        data-tooltip="The easing function controlling acceleration/deceleration. power2.out starts fast and decelerates. none is linear. elastic overshoots and bounces back."
-        >${escapeHtml(anim.vars.ease || 'default')}</span>
-    </div>
-    <div class="anim-controls">
-      <button class="btn btn-icon anim-btn" data-cmd="anim_restart" data-id="${anim.id}"
-        data-tooltip="Restart this animation from the beginning.">⏮</button>
-      <button class="btn btn-icon anim-btn" data-cmd="anim_play" data-id="${anim.id}"
-        data-tooltip="Play / resume this animation.">▶</button>
-      <button class="btn btn-icon anim-btn" data-cmd="anim_pause" data-id="${anim.id}"
-        data-tooltip="Pause this animation at its current position.">⏸</button>
-      <button class="btn btn-icon anim-btn" data-cmd="anim_reverse" data-id="${anim.id}"
-        data-tooltip="Play this animation in reverse from its current position.">◀</button>
-      <input type="range" class="scrub-range anim-scrub" min="0" max="1" step="0.01"
-        value="${anim.progress}" data-id="${anim.id}"
-        data-tooltip="Drag to scrub this animation's progress from 0 (start) to 1 (end).">
-      <button class="btn btn-sm edit-btn" data-id="${anim.id}"
-        data-tooltip="Open the property editor to change this tween's animation values live.">Edit</button>
-    </div>
+    <span class="dot ${cls}" data-tooltip="State: ${label}"></span>
+    <span class="anim-type-tag ${anim.type}"
+      data-tooltip="${anim.type === 'timeline'
+        ? 'Timeline: groups multiple tweens together, controlled as one unit.'
+        : 'Tween: single animation instruction moving element(s) from one state to another.'
+      }">${anim.type}</span>
+    <span class="list-item-target" data-tooltip="${escapeAttr(
+        anim.targetSelector
+          ? 'CSS selector of the element(s) being animated.'
+          : 'Anonymous — element has no id/class, or this targets a plain JS object.'
+      )}">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
+    ${scroll}
+    <span class="list-item-meta">${anim.duration.toFixed(1)}s</span>
   `;
 
-  // Playback button handlers
-  item.querySelectorAll('.anim-btn').forEach((btn) => {
-    btn.addEventListener('click', () =>
-      sendCommand({ command: btn.dataset.cmd, id: btn.dataset.id })
-    );
-  });
-
-  // Scrub handler
-  item.querySelector('.anim-scrub').addEventListener('input', (e) => {
-    sendCommand({ command: 'anim_set_progress', id: e.target.dataset.id, value: parseFloat(e.target.value) });
-  });
-
-  // Edit handler
-  item.querySelector('.edit-btn').addEventListener('click', () => {
-    if (lastData) {
-      const a = lastData.animations.find((x) => x.id === anim.id);
-      if (a) openPropEditor(a);
-    }
-  });
-
-  // Click the top row to toggle collapse on that item individually
-  item.querySelector('.anim-row-top').addEventListener('click', (e) => {
-    if (e.target.closest('button') || e.target.closest('input')) return;
-    item.classList.toggle('collapsed');
-  });
-
-  // Timeline children (nested tweens)
-  if (anim.type === 'timeline' && allAnimations) {
-    const children = allAnimations.filter((a) => a.parentId === anim.id);
-    if (children.length) {
-      // Add chevron to the top row
-      const rowTop = item.querySelector('.anim-row-top');
-      const chevron = document.createElement('button');
-      chevron.className = 'tl-chevron';
-      chevron.textContent = '▶';
-      chevron.dataset.tooltip = `Expand to see ${children.length} tween${children.length > 1 ? 's' : ''} inside this timeline.`;
-      rowTop.insertBefore(chevron, rowTop.firstChild);
-
-      // Build children container
-      const childrenEl = document.createElement('div');
-      childrenEl.className = 'anim-children';
-
-      children.forEach((child) => {
-        const childItem = buildChildItem(child);
-        animItemMap.set(child.id, childItem);
-        childrenEl.appendChild(childItem);
-      });
-
-      item.appendChild(childrenEl);
-
-      chevron.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const open = childrenEl.classList.toggle('open');
-        chevron.classList.toggle('open', open);
-        chevron.dataset.tooltip = open
-          ? `Collapse — hide the ${children.length} tween${children.length > 1 ? 's' : ''} inside this timeline.`
-          : `Expand to see ${children.length} tween${children.length > 1 ? 's' : ''} inside this timeline.`;
-      });
-    }
-  }
-
-  // Element inspector hover
+  item.addEventListener('click', () => selectAnim(anim.id));
   item.addEventListener('mouseenter', () => {
     if (!elementInspectorActive) return;
     sendCommand({ command: 'highlight_element', id: anim.id, label: anim.targetSelector || 'animation' });
@@ -470,111 +319,440 @@ function buildAnimItem(anim, allAnimations) {
     if (!elementInspectorActive) return;
     sendCommand({ command: 'unhighlight_element' });
   });
-
   return item;
 }
 
-function buildChildItem(anim) {
-  const item = document.createElement('div');
-  item.className = 'anim-child-item';
-  item.dataset.id = anim.id;
+function patchListItem(anim, item) {
+  if (!item) return;
+  const dot = item.querySelector('.dot');
+  if (dot) {
+    const cls   = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
+    const label = anim.paused ? 'Paused'     : anim.progress >= 1 ? 'Complete'     : 'Playing';
+    if (dot.className !== `dot ${cls}`) dot.className = `dot ${cls}`;
+    dot.dataset.tooltip = `State: ${label}`;
+  }
+}
 
-  const stateClass = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
-  const stateLabel = anim.paused ? 'Paused' : anim.progress >= 1 ? 'Complete' : 'Playing';
-  const animatedProps = Object.keys(anim.vars)
-    .filter((k) => !['ease', 'duration', 'delay', 'repeat', 'yoyo', 'stagger'].includes(k));
-  const propDisplay = animatedProps.join(', ') || 'no props';
-  const propTooltip = animatedProps.length
-    ? `Animated properties: ${propDisplay}`
-    : 'No standard animated properties detected. May target plugin-specific values.';
-  const targetTooltip = anim.targetSelector
-    ? 'The CSS selector of the element being animated.'
-    : 'Anonymous target — element has no id or class, or this targets a JS object.';
+// ── Animation detail pane ─────────────────────────────────────────────────────
+function renderAnimDetail(id) {
+  const container = document.getElementById('anim-detail');
+  const anim = lastData?.animations.find((a) => a.id === id);
+  if (!anim) { container.innerHTML = ''; return; }
 
-  item.innerHTML = `
-    <div class="anim-row-top">
-      <span class="dot ${stateClass}" data-tooltip="Animation state: ${stateLabel}"></span>
-      <span class="anim-type-tag tween" data-tooltip="A tween is a single animation instruction.">tween</span>
-      <span class="anim-target" data-tooltip="${escapeAttr(targetTooltip)}">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
-      <span class="anim-props text-secondary" data-tooltip="${escapeAttr(propTooltip)}">${escapeHtml(propDisplay)}</span>
-      <span class="anim-duration text-secondary"
-        data-tooltip="Duration of this tween in seconds.">${anim.duration.toFixed(2)}s</span>
-      <span class="anim-ease text-secondary"
-        data-tooltip="Easing function for this tween.">${escapeHtml(anim.vars.ease || 'default')}</span>
+  const linkedSt = lastData?.scrollTriggers.find((st) => st.linkedAnimId === id);
+  const children = anim.type === 'timeline'
+    ? lastData.animations.filter((a) => a.parentId === id)
+    : [];
+
+  const cls         = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
+  const stateLabel  = anim.paused ? 'Paused'     : anim.progress >= 1 ? 'Complete'     : 'Playing';
+  const progressPct = Math.round(anim.progress * 100);
+  const typeTooltip = anim.type === 'timeline'
+    ? 'Timeline: a container that groups multiple tweens. Control all of them with one play/pause/scrub.'
+    : 'Tween: a single animation instruction — moves element(s) from one state to another over a duration.';
+  const animatedProps = Object.entries(anim.vars || {})
+    .filter(([k]) => !['ease','duration','delay','repeat','yoyo','stagger'].includes(k));
+
+  let html = `
+    <div class="detail-header">
+      <span class="anim-type-tag ${anim.type}" data-tooltip="${escapeAttr(typeTooltip)}">${anim.type}</span>
+      <span class="detail-target" data-tooltip="${escapeAttr(
+          anim.targetSelector
+            ? 'The CSS selector of the element(s) this animation targets.'
+            : 'Anonymous — no identifiable selector. The element may have no id or class, or this animation targets a plain JS object.'
+        )}">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
+      <button class="btn btn-sm" id="detail-edit-btn" data-id="${escapeAttr(anim.id)}"
+        data-tooltip="Open the property editor to change this animation's values and re-apply them live.">Edit Props</button>
     </div>
-    <div class="anim-controls">
-      <button class="btn btn-icon anim-btn" data-cmd="anim_restart" data-id="${anim.id}"
-        data-tooltip="Restart this tween.">⏮</button>
-      <button class="btn btn-icon anim-btn" data-cmd="anim_play" data-id="${anim.id}"
-        data-tooltip="Play this tween.">▶</button>
-      <button class="btn btn-icon anim-btn" data-cmd="anim_pause" data-id="${anim.id}"
-        data-tooltip="Pause this tween.">⏸</button>
-      <button class="btn btn-icon anim-btn" data-cmd="anim_reverse" data-id="${anim.id}"
-        data-tooltip="Reverse this tween.">◀</button>
-      <input type="range" class="scrub-range anim-scrub" min="0" max="1" step="0.01"
-        value="${anim.progress}" data-id="${anim.id}"
-        data-tooltip="Scrub this tween's progress.">
-      <button class="btn btn-sm edit-btn" data-id="${anim.id}"
-        data-tooltip="Edit this tween's properties.">Edit</button>
+
+    <div class="detail-stats">
+      <div class="stat">
+        <span class="stat-label">State</span>
+        <span class="stat-value"><span class="dot ${cls}" id="detail-state-dot"></span>&nbsp;<span id="detail-state-label" style="font-size:13px;font-family:system-ui">${stateLabel}</span></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="How far through the animation. 0% = start, 100% = end.">Progress</span>
+        <span class="stat-value" id="detail-progress-val">${progressPct}%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Total playback time of this animation in seconds.">Duration</span>
+        <span class="stat-value">${anim.duration.toFixed(2)}s</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Easing function controlling acceleration. power2.out = decelerates, elastic = bounces, none = linear.">Ease</span>
+        <span class="stat-value stat-sm">${escapeHtml(anim.vars?.ease || 'default')}</span>
+      </div>
+      ${typeof anim.repeat === 'number' && anim.repeat !== 0 ? `
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Number of times this animation repeats. -1 means infinite loop.">Repeat</span>
+        <span class="stat-value">${anim.repeat === -1 ? '∞' : anim.repeat}</span>
+      </div>` : ''}
+      ${typeof anim.delay === 'number' && anim.delay > 0 ? `
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Delay before this animation starts, in seconds.">Delay</span>
+        <span class="stat-value">${anim.delay.toFixed(2)}s</span>
+      </div>` : ''}
+    </div>
+
+    <div class="detail-playback">
+      <div class="detail-playback-btns">
+        <button class="btn btn-icon anim-btn" data-cmd="anim_restart" data-id="${escapeAttr(anim.id)}" data-tooltip="Restart from the beginning.">⏮</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_play"    data-id="${escapeAttr(anim.id)}" data-tooltip="Play / resume.">▶</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_pause"   data-id="${escapeAttr(anim.id)}" data-tooltip="Pause at current position.">⏸</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_reverse" data-id="${escapeAttr(anim.id)}" data-tooltip="Reverse from current position.">◀</button>
+        <span class="detail-progress-pct" id="detail-scrub-pct">${progressPct}%</span>
+      </div>
+      <input type="range" class="scrub-lg" id="detail-anim-scrub"
+        min="0" max="1" step="0.01" value="${anim.progress}" data-id="${escapeAttr(anim.id)}"
+        data-tooltip="Drag to scrub this animation from start (0%) to end (100%).">
     </div>
   `;
 
-  // Click top row to individually expand/collapse this child
-  item.querySelector('.anim-row-top').addEventListener('click', (e) => {
-    if (e.target.closest('button') || e.target.closest('input')) return;
-    item.classList.toggle('collapsed');
-  });
+  if (linkedSt) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-header">Linked ScrollTrigger</div>
+      <button class="detail-link" id="detail-st-link" data-stid="${escapeAttr(linkedSt.id)}"
+        data-tooltip="This animation's progress is controlled by a ScrollTrigger. Click to jump to it in the ScrollTrigger tab.">
+        ⟳ ${escapeHtml(linkedSt.triggerSelector || 'ScrollTrigger')}
+      </button>
+    </div>`;
+  }
 
-  item.querySelectorAll('.anim-btn').forEach((btn) => {
-    btn.addEventListener('click', () =>
-      sendCommand({ command: btn.dataset.cmd, id: btn.dataset.id })
-    );
-  });
-  item.querySelector('.anim-scrub').addEventListener('input', (e) => {
-    sendCommand({ command: 'anim_set_progress', id: e.target.dataset.id, value: parseFloat(e.target.value) });
-  });
-  item.querySelector('.edit-btn').addEventListener('click', () => {
+  if (animatedProps.length) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-header">Animated Properties
+        <span data-tooltip="The CSS and transform values this animation is changing. GSAP animates these from their current value to the target value (or from 'from' to current for gsap.from())." style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--border);color:var(--text-secondary);font-size:9px;cursor:help;font-weight:700">?</span>
+      </div>
+      <div class="detail-props-grid">
+        ${animatedProps.map(([k, v]) => `
+          <div class="detail-prop-row">
+            <span class="detail-prop-name" data-tooltip="${escapeAttr(PROP_TOOLTIPS[k] || k)}">${escapeHtml(k)}</span>
+            <span class="detail-prop-value">${escapeHtml(String(v))}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  } else if (anim.type !== 'timeline') {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-header">Animated Properties</div>
+      <span class="text-secondary" style="font-size:12px" data-tooltip="No standard CSS/transform properties found. This tween may animate plugin-specific values (DrawSVG, MotionPath), CSS custom properties, or object values not tracked by the standard list.">No standard properties detected</span>
+    </div>`;
+  }
+
+  if (children.length) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-header">${children.length} Child Tween${children.length > 1 ? 's' : ''}
+        <span data-tooltip="This timeline contains these tweens as children. The timeline's playhead controls them all together." style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--border);color:var(--text-secondary);font-size:9px;cursor:help;font-weight:700">?</span>
+      </div>
+      <div class="detail-children">
+        ${children.map((child) => {
+          const childProps = Object.keys(child.vars || {})
+            .filter((k) => !['ease','duration','delay','repeat','yoyo','stagger'].includes(k));
+          return `
+          <div class="detail-child-row" data-childid="${escapeAttr(child.id)}">
+            <span class="anim-type-tag tween" style="font-size:8px">tween</span>
+            <span class="detail-child-target"
+              data-tooltip="${escapeAttr(child.targetSelector ? 'CSS selector of this child tween\'s target element.' : 'Anonymous target.')}"
+              >${escapeHtml(child.targetSelector || 'anonymous')}</span>
+            <span class="list-item-meta">${child.duration.toFixed(1)}s</span>
+            ${childProps.length
+              ? `<span style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px" data-tooltip="Animated properties: ${escapeAttr(childProps.join(', '))}">${escapeHtml(childProps.join(', '))}</span>`
+              : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+
+  container.querySelector('#detail-edit-btn')?.addEventListener('click', () => {
     if (lastData) {
       const a = lastData.animations.find((x) => x.id === anim.id);
       if (a) openPropEditor(a);
     }
   });
+
+  container.querySelectorAll('.anim-btn').forEach((btn) => {
+    btn.addEventListener('click', () => sendCommand({ command: btn.dataset.cmd, id: btn.dataset.id }));
+  });
+
+  const scrub = container.querySelector('#detail-anim-scrub');
+  if (scrub) {
+    scrub.addEventListener('input', (e) => {
+      const pct = Math.round(parseFloat(e.target.value) * 100);
+      const pctEl = container.querySelector('#detail-scrub-pct');
+      if (pctEl) pctEl.textContent = pct + '%';
+      sendCommand({ command: 'anim_set_progress', id: e.target.dataset.id, value: parseFloat(e.target.value) });
+    });
+  }
+
+  container.querySelector('#detail-st-link')?.addEventListener('click', (e) => {
+    const stId = e.currentTarget.dataset.stid;
+    switchToTab('scrolltrigger');
+    setTimeout(() => selectSt(stId), 60);
+  });
+
+  // Child row clicks jump to that animation in the list
+  container.querySelectorAll('.detail-child-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const childId = row.dataset.childid;
+      if (childId && animItemMap.has(childId)) {
+        // Child not in filtered list; just select and show detail directly
+        selectedAnimId = childId;
+        renderAnimDetail(childId);
+      }
+    });
+  });
+}
+
+function patchAnimDetail() {
+  if (!selectedAnimId || !lastData) return;
+  const anim = lastData.animations.find((a) => a.id === selectedAnimId);
+  if (!anim) return;
+
+  const container   = document.getElementById('anim-detail');
+  const cls         = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
+  const stateLabel  = anim.paused ? 'Paused'     : anim.progress >= 1 ? 'Complete'     : 'Playing';
+  const progressPct = Math.round(anim.progress * 100);
+
+  const dot = container.querySelector('#detail-state-dot');
+  if (dot && dot.className !== `dot ${cls}`) dot.className = `dot ${cls}`;
+  const lbl = container.querySelector('#detail-state-label');
+  if (lbl) lbl.textContent = stateLabel;
+  const prog = container.querySelector('#detail-progress-val');
+  if (prog) prog.textContent = progressPct + '%';
+  const scrubPct = container.querySelector('#detail-scrub-pct');
+  if (scrubPct) scrubPct.textContent = progressPct + '%';
+
+  const scrub = container.querySelector('#detail-anim-scrub');
+  if (scrub && document.activeElement !== scrub) {
+    if (Math.abs(parseFloat(scrub.value) - anim.progress) > 0.005) scrub.value = anim.progress;
+  }
+}
+
+// ── ScrollTrigger left pane ───────────────────────────────────────────────────
+function renderScrollTriggers(data) {
+  const list = document.getElementById('st-list');
+
+  if (!data.scrollTriggers.length) {
+    list.innerHTML =
+      '<div class="empty-state">No ScrollTrigger instances detected. ScrollTrigger must be loaded, registered, and have instances created to appear here.</div>';
+    stOrderIds = [];
+    stItemMap.clear();
+    lastStIds = '';
+    return;
+  }
+
+  const incomingIds = data.scrollTriggers.map((st) => st.id);
+  stOrderIds = stOrderIds.filter((id) => incomingIds.includes(id));
+  incomingIds.forEach((id) => { if (!stOrderIds.includes(id)) stOrderIds.push(id); });
+
+  const orderedAll = stOrderIds
+    .map((id) => data.scrollTriggers.find((st) => st.id === id))
+    .filter(Boolean);
+  const ordered = applyStFilter(orderedAll);
+
+  if (!ordered.length) {
+    list.innerHTML = `<div class="empty-state">No ScrollTriggers match the "${stFilter}" filter.</div>`;
+    stItemMap.clear();
+    lastStIds = '';
+    return;
+  }
+
+  const newIds = ordered.map((s) => s.id).join(',');
+  if (newIds !== lastStIds) {
+    lastStIds = newIds;
+    list.innerHTML = '';
+    stItemMap.clear();
+    ordered.forEach((st) => {
+      const item = buildStListItem(st);
+      stItemMap.set(st.id, item);
+      list.appendChild(item);
+    });
+    if (selectedStId) {
+      stItemMap.get(selectedStId)?.classList.add('selected');
+    }
+  } else {
+    ordered.forEach((st) => patchStListItem(st, stItemMap.get(st.id)));
+  }
+
+  if (selectedStId) patchStDetail();
+}
+
+function buildStListItem(st) {
+  const item = document.createElement('div');
+  item.className  = 'list-item';
+  item.dataset.id = st.id;
+
+  const scrubLabel = st.scrub !== false ? 'scrub' : 'trigger';
+  const pct        = Math.round(st.progress * 100);
+
+  item.innerHTML = `
+    <span class="dot ${st.isActive ? 'dot-active' : 'dot-paused'}"
+      data-tooltip="Active means scroll is currently inside this trigger's start/end range."></span>
+    <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0;
+      background:#0ea5e922;color:#0ea5e9;border:1px solid #0ea5e944">${escapeHtml(scrubLabel)}</span>
+    <span class="list-item-target"
+      data-tooltip="${escapeAttr(st.triggerSelector
+        ? 'The CSS selector of the element that triggers this ScrollTrigger.'
+        : 'Anonymous trigger — no identifiable selector.'
+      )}">${escapeHtml(st.triggerSelector || 'anonymous')}</span>
+    <span class="list-item-meta" id="st-list-pct-${escapeAttr(st.id)}">${pct}%</span>
+  `;
+
+  item.addEventListener('click', () => selectSt(st.id));
   item.addEventListener('mouseenter', () => {
     if (!elementInspectorActive) return;
-    sendCommand({ command: 'highlight_element', id: anim.id, label: anim.targetSelector || 'tween' });
+    sendCommand({ command: 'highlight_st', id: st.id, label: st.triggerSelector || 'ScrollTrigger' });
   });
   item.addEventListener('mouseleave', () => {
     if (!elementInspectorActive) return;
     sendCommand({ command: 'unhighlight_element' });
   });
-
   return item;
 }
 
-function patchAnimItem(anim, item) {
+function patchStListItem(st, item) {
   if (!item) return;
-
-  // Patch state dot
   const dot = item.querySelector('.dot');
   if (dot) {
-    const cls = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
-    const lbl = anim.paused ? 'Paused' : anim.progress >= 1 ? 'Complete' : 'Playing';
+    const cls = st.isActive ? 'dot-active' : 'dot-paused';
     if (dot.className !== `dot ${cls}`) dot.className = `dot ${cls}`;
-    dot.dataset.tooltip = `Animation state: ${lbl}`;
   }
-
-  // Patch scrub range (only if not being dragged by user)
-  const scrub = item.querySelector('.anim-scrub');
-  if (scrub && document.activeElement !== scrub) {
-    const val = parseFloat(scrub.value);
-    if (Math.abs(val - anim.progress) > 0.005) scrub.value = anim.progress;
-  }
+  const pctEl = item.querySelector(`#st-list-pct-${CSS.escape(st.id)}`);
+  if (pctEl) pctEl.textContent = Math.round(st.progress * 100) + '%';
 }
 
-function renderTimelineView(data) {
-  const container = document.getElementById('timeline-container');
-  if (!timelineView) timelineView = new TimelineView(container);
-  timelineView.render(data.animations, data.scrollTriggers);
+// ── ScrollTrigger detail pane ─────────────────────────────────────────────────
+function renderStDetail(id) {
+  const container = document.getElementById('st-detail');
+  const st = lastData?.scrollTriggers.find((s) => s.id === id);
+  if (!st) { container.innerHTML = ''; return; }
+
+  const linkedAnim   = st.linkedAnimId
+    ? lastData.animations.find((a) => a.id === st.linkedAnimId)
+    : null;
+  const progressPct  = Math.round(st.progress * 100);
+  const scrubLabel   = st.scrub === true ? 'yes' : st.scrub === false ? 'no' : `${st.scrub}s lag`;
+
+  let html = `
+    <div class="detail-header">
+      <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0;
+        background:#0ea5e922;color:#0ea5e9;border:1px solid #0ea5e944"
+        data-tooltip="A ScrollTrigger links animation playback or actions to the page scroll position.">scrolltrigger</span>
+      <span class="detail-target"
+        data-tooltip="${escapeAttr(st.triggerSelector
+          ? 'The CSS selector of the element that triggers this ScrollTrigger.'
+          : 'Anonymous — no identifiable CSS selector.'
+        )}">${escapeHtml(st.triggerSelector || 'anonymous')}</span>
+    </div>
+
+    <div class="detail-stats">
+      <div class="stat">
+        <span class="stat-label">State</span>
+        <span class="stat-value"><span class="dot ${st.isActive ? 'dot-active' : 'dot-paused'}" id="detail-st-dot"></span>&nbsp;<span id="detail-st-state" style="font-size:13px;font-family:system-ui">${st.isActive ? 'Active' : 'Inactive'}</span></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="0% = scroll at the start position, 100% = scroll at the end position.">Progress</span>
+        <span class="stat-value" id="detail-st-progress">${progressPct}%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Where this trigger activates. Format: 'elementEdge viewportEdge'. e.g. 'top center' = when the element top hits the viewport centre.">Start</span>
+        <span class="stat-value stat-sm">${escapeHtml(st.start)}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Where this trigger deactivates. Same format as start.">End</span>
+        <span class="stat-value stat-sm">${escapeHtml(st.end)}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label" data-tooltip="Scrub ties animation progress directly to scroll position so dragging the scrollbar drags the animation. Without scrub, the animation plays when the trigger fires.">Scrub</span>
+        <span class="stat-value stat-sm">${escapeHtml(scrubLabel)}</span>
+      </div>
+      ${st.pin ? `<div class="stat">
+        <span class="stat-label" data-tooltip="Pin fixes the trigger element in place while the scroll continues, creating a sticky scroll effect.">Pin</span>
+        <span class="stat-value">yes</span>
+      </div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-header">Debug Markers</div>
+      <label class="toggle-row"
+        data-tooltip="Show visual marker lines on the page for this trigger's start and end scroll positions. Very useful for debugging why a trigger fires at the wrong scroll point.">
+        Show markers on page
+        <span class="toggle-switch">
+          <input type="checkbox" id="detail-st-markers" ${st.markers ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </span>
+      </label>
+    </div>
+  `;
+
+  if (linkedAnim) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-header">Linked Animation</div>
+      <button class="detail-link" id="detail-anim-link" data-animid="${escapeAttr(linkedAnim.id)}"
+        data-tooltip="This ScrollTrigger controls the playback of this animation. Click to jump to it in the Animations tab.">
+        ▶ ${escapeHtml(linkedAnim.targetSelector || 'anonymous')}
+      </button>
+    </div>`;
+  }
+
+  if (st.invalidateOnRefresh === false && st.scrub !== false) {
+    html += `
+    <div class="lint-item lint-warning" style="margin:0">
+      <div class="lint-item-header">
+        <span class="lint-icon">⚠</span>
+        <strong>Missing invalidateOnRefresh</strong>
+      </div>
+      <p class="lint-desc">Without <code>invalidateOnRefresh: true</code>, animation values are baked in at page load and won't update when the window is resized.</p>
+      <div class="lint-fix"><strong>Fix:</strong> Add <code>invalidateOnRefresh: true</code> to this ScrollTrigger config.</div>
+    </div>`;
+  }
+
+  html += `
+    <div class="detail-section">
+      <div class="detail-section-header">Actions</div>
+      <button class="btn" id="detail-st-refresh"
+        data-tooltip="Recalculate all ScrollTrigger positions — run this after layout changes, image loads, or font changes that affect page height.">Refresh All Triggers</button>
+    </div>
+  `;
+
+  container.innerHTML = html;
+
+  container.querySelector('#detail-st-markers')?.addEventListener('change', (e) => {
+    sendCommand({ command: 'toggle_markers_one', id: st.id, value: e.target.checked });
+  });
+
+  container.querySelector('#detail-anim-link')?.addEventListener('click', (e) => {
+    const animId = e.currentTarget.dataset.animid;
+    switchToTab('animations');
+    setTimeout(() => selectAnim(animId), 60);
+  });
+
+  container.querySelector('#detail-st-refresh')?.addEventListener('click', () => {
+    sendCommand({ command: 'inject_js', code: 'if (window.ScrollTrigger) ScrollTrigger.refresh();' });
+  });
+}
+
+function patchStDetail() {
+  if (!selectedStId || !lastData) return;
+  const st = lastData.scrollTriggers.find((s) => s.id === selectedStId);
+  if (!st) return;
+
+  const container  = document.getElementById('st-detail');
+  const cls        = st.isActive ? 'dot-active' : 'dot-paused';
+  const dot        = container.querySelector('#detail-st-dot');
+  if (dot && dot.className !== `dot ${cls}`) dot.className = `dot ${cls}`;
+  const stateEl = container.querySelector('#detail-st-state');
+  if (stateEl) stateEl.textContent = st.isActive ? 'Active' : 'Inactive';
+  const prog = container.querySelector('#detail-st-progress');
+  if (prog) prog.textContent = Math.round(st.progress * 100) + '%';
 }
 
 // ── Panel row highlight (reverse element inspector) ───────────────────────────
@@ -588,7 +766,7 @@ function highlightPanelRows(animIds, stIds) {
     }
   });
   stIds.forEach((id) => {
-    const item = document.querySelector(`.st-item [data-id="${id}"]`)?.closest('.st-item');
+    const item = stItemMap.get(id);
     if (item) {
       item.classList.add('inspector-highlight');
       item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -602,125 +780,20 @@ function clearPanelHighlights() {
   );
 }
 
-// ── ScrollTrigger tab — stable ordering ───────────────────────────────────────
-function applyStFilter(sts) {
-  switch (stFilter) {
-    case 'scrub':    return sts.filter((st) => st.scrub !== false);
-    case 'one-shot': return sts.filter((st) => st.scrub === false);
-    case 'pinned':   return sts.filter((st) => st.pin);
-    case 'active':   return sts.filter((st) => st.isActive);
-    default:         return sts;
-  }
-}
-
-function renderScrollTriggers(data) {
-  const list = document.getElementById('st-list');
-
-  if (!data.scrollTriggers.length) {
-    list.innerHTML =
-      '<div class="empty-state">No ScrollTrigger instances detected. ScrollTrigger must be loaded, registered, and have instances created to appear here.</div>';
-    stOrderIds = [];
-    return;
-  }
-
-  // Maintain stable insertion order — new instances go to the end,
-  // existing ones stay in their original position.
-  const incomingIds = data.scrollTriggers.map((st) => st.id);
-  stOrderIds = stOrderIds.filter((id) => incomingIds.includes(id));
-  incomingIds.forEach((id) => { if (!stOrderIds.includes(id)) stOrderIds.push(id); });
-
-  const orderedAll = stOrderIds
-    .map((id) => data.scrollTriggers.find((st) => st.id === id))
-    .filter(Boolean);
-
-  const ordered = applyStFilter(orderedAll);
-
-  if (!ordered.length) {
-    list.innerHTML = `<div class="empty-state">No ScrollTrigger instances match the "${stFilter}" filter.</div>`;
-    return;
-  }
-
-  list.innerHTML = '';
-  ordered.forEach((st) => {
-    const item = document.createElement('div');
-    item.className = 'st-item';
-
-    const scrubLabel =
-      st.scrub === true ? 'yes' : st.scrub === false ? 'no' : `${st.scrub}s lag`;
-    const progressPct = Math.round(st.progress * 100);
-
-    const pinDetail = st.pin
-      ? `<span class="st-detail" data-tooltip="Pin fixes the trigger element in place while the scroll continues, creating a sticky scroll effect.">pin: <code>yes</code></span>`
-      : '';
-    const invalidateWarn =
-      !st.invalidateOnRefresh && st.scrub !== false
-        ? `<span class="st-detail lint-warn-inline" data-tooltip="Without invalidateOnRefresh: true, animation values bake in at page load and won't update when the window resizes. Add invalidateOnRefresh: true to your ScrollTrigger config.">⚠ no invalidateOnRefresh</span>`
-        : '';
-
-    item.innerHTML = `
-      <div class="st-row-top">
-        <span class="dot ${st.isActive ? 'dot-active' : 'dot-paused'}"
-          data-tooltip="Active means the scroll position is currently inside this trigger's start/end range."></span>
-        <span class="st-trigger">${escapeHtml(st.triggerSelector || 'anonymous')}</span>
-        <span class="badge ${st.scrub ? 'badge-scroll' : ''}"
-          data-tooltip="Scrub connects animation progress to scroll position. Without scrub, the animation plays when the trigger is hit. With scrub, dragging the scrollbar drags the animation."
-          >${st.scrub ? 'scrub' : 'trigger'}</span>
-        <span class="st-progress text-secondary"
-          data-tooltip="How far through this trigger the current scroll position is. 0% = at the start position, 100% = at the end position."
-          >${progressPct}%</span>
-      </div>
-      <div class="st-details">
-        <span class="st-detail"
-          data-tooltip="Where this trigger activates. Format: 'elementEdge viewportEdge'. e.g. 'top center' means when the top of the trigger element reaches the centre of the viewport."
-          >start: <code>${escapeHtml(st.start)}</code></span>
-        <span class="st-detail"
-          data-tooltip="Where this trigger deactivates. Same format as start."
-          >end: <code>${escapeHtml(st.end)}</code></span>
-        <span class="st-detail"
-          data-tooltip="Scrub connects animation progress to scroll position. Without scrub, the animation plays when the trigger is hit. With scrub, dragging the scrollbar drags the animation."
-          >scrub: <code>${escapeHtml(scrubLabel)}</code></span>
-        ${pinDetail}
-        ${invalidateWarn}
-      </div>
-      <div class="st-controls">
-        <label class="toggle-row"
-          data-tooltip="Show visual marker lines on the page for this trigger's start and end scroll positions. Very useful for debugging why a trigger fires at the wrong point.">
-          Markers
-          <span class="toggle-switch">
-            <input type="checkbox" class="st-markers-toggle" data-id="${st.id}" ${st.markers ? 'checked' : ''}>
-            <span class="toggle-slider"></span>
-          </span>
-        </label>
-      </div>
-    `;
-
-    // Markers toggle
-    item.querySelector('.st-markers-toggle').addEventListener('change', (e) => {
-      sendCommand({ command: 'toggle_markers_one', id: e.target.dataset.id, value: e.target.checked });
-    });
-
-    // Element inspector hover
-    item.addEventListener('mouseenter', () => {
-      if (!elementInspectorActive) return;
-      sendCommand({ command: 'highlight_st', id: st.id, label: st.triggerSelector || 'ScrollTrigger' });
-    });
-    item.addEventListener('mouseleave', () => {
-      if (!elementInspectorActive) return;
-      sendCommand({ command: 'unhighlight_element' });
-    });
-
-    list.appendChild(item);
-  });
+// ── Timeline Gantt view ───────────────────────────────────────────────────────
+function renderTimelineView(data) {
+  const container = document.getElementById('timeline-container');
+  if (!timelineView) timelineView = new TimelineView(container);
+  timelineView.render(data.animations, data.scrollTriggers);
 }
 
 // ── Linter tab ────────────────────────────────────────────────────────────────
 function renderLinter(data) {
   const container = document.getElementById('lint-results');
-  const results = runLinter(data);
+  const results   = runLinter(data);
 
   if (!results.length) {
-    container.innerHTML =
-      '<div class="empty-state lint-pass">✓ No issues found. Looks good!</div>';
+    container.innerHTML = '<div class="empty-state lint-pass">✓ No issues found. Looks good!</div>';
     return;
   }
 
@@ -755,7 +828,7 @@ function renderLinter(data) {
 function renderOverrides() {
   chrome.storage.local.get(null, (items) => {
     const overrides = Object.entries(items).filter(([k]) => k.startsWith('override_'));
-    const list = document.getElementById('overrides-list');
+    const list      = document.getElementById('overrides-list');
 
     if (!overrides.length) {
       list.innerHTML =
@@ -765,11 +838,10 @@ function renderOverrides() {
 
     list.innerHTML = '';
     overrides.forEach(([key, data]) => {
-      const url = key.replace('override_', '');
-      const item = document.createElement('div');
+      const url     = key.replace('override_', '');
+      const item    = document.createElement('div');
       item.className = 'override-item';
       const preview = data.code.length > 200 ? data.code.slice(0, 200) + '…' : data.code;
-
       item.innerHTML = `
         <div class="override-url">${escapeHtml(url)}</div>
         <pre class="override-code">${escapeHtml(preview)}</pre>
@@ -781,7 +853,6 @@ function renderOverrides() {
           <button class="btn btn-danger override-delete" data-key="${escapeAttr(key)}">Delete</button>
         </div>
       `;
-
       item.querySelector('.override-active').addEventListener('change', (e) => {
         chrome.storage.local.get(key, (stored) => {
           if (stored[key]) chrome.storage.local.set({ [key]: { ...stored[key], active: e.target.checked } });
@@ -790,21 +861,16 @@ function renderOverrides() {
       item.querySelector('.override-delete').addEventListener('click', () => {
         chrome.storage.local.remove(key, () => renderOverrides());
       });
-
       list.appendChild(item);
     });
   });
 }
 
 // ── Global playback controls ──────────────────────────────────────────────────
-document.getElementById('btn-play-all').addEventListener('click', () => sendCommand({ command: 'play_all' }));
-document.getElementById('btn-pause-all').addEventListener('click', () => sendCommand({ command: 'pause_all' }));
+document.getElementById('btn-play-all').addEventListener('click',    () => sendCommand({ command: 'play_all' }));
+document.getElementById('btn-pause-all').addEventListener('click',   () => sendCommand({ command: 'pause_all' }));
 document.getElementById('btn-reverse-all').addEventListener('click', () => sendCommand({ command: 'reverse_all' }));
 document.getElementById('btn-restart-all').addEventListener('click', () => sendCommand({ command: 'restart_all' }));
-
-document.getElementById('global-scrub').addEventListener('input', (e) => {
-  sendCommand({ command: 'set_progress', value: parseFloat(e.target.value) });
-});
 
 document.querySelectorAll('.speed-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -829,9 +895,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     chrome.devtools.inspectedWindow.eval('window.location.href', (pageUrl) => {
       chrome.storage.local.remove(`override_${pageUrl}`, () => {
         sendCommand({ command: 'reset_all' });
-        setTimeout(() => {
-          chrome.devtools.inspectedWindow.eval('window.location.reload()');
-        }, 800);
+        setTimeout(() => chrome.devtools.inspectedWindow.eval('window.location.reload()'), 800);
       });
     });
   }
@@ -850,11 +914,11 @@ document.getElementById('btn-inject-css').addEventListener('click', () => {
   if (!code) return;
   sendCommand({ command: 'inject_css', code });
   addToHistory('css', code);
-  const cssResult = document.getElementById('css-inject-result');
-  cssResult.style.display = '';
-  cssResult.className = 'inject-result success';
-  cssResult.textContent = '✓ CSS injected into page';
-  setTimeout(() => { cssResult.style.display = 'none'; }, 4000);
+  const el = document.getElementById('css-inject-result');
+  el.style.display = '';
+  el.className     = 'inject-result success';
+  el.textContent   = '✓ CSS injected into page';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
 });
 
 document.getElementById('btn-save-js').addEventListener('click', () => {
@@ -881,9 +945,9 @@ document.getElementById('btn-export-overrides').addEventListener('click', () => 
   chrome.storage.local.get(null, (items) => {
     const overrides = Object.fromEntries(Object.entries(items).filter(([k]) => k.startsWith('override_')));
     const blob = new Blob([JSON.stringify(overrides, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
     a.download = 'gsap-inspector-overrides.json';
     a.click();
     URL.revokeObjectURL(url);
@@ -905,27 +969,25 @@ document.getElementById('btn-lint-run').addEventListener('click', () => {
 
 // ── Property editor modal ──────────────────────────────────────────────────────
 function openPropEditor(anim) {
-  const modal = document.getElementById('prop-editor-modal');
+  const modal  = document.getElementById('prop-editor-modal');
   const editor = document.getElementById('prop-editor');
   document.getElementById('modal-title').textContent = `Edit: ${anim.targetSelector || 'anonymous'}`;
 
   const editableProps = [
-    'x', 'y', 'xPercent', 'yPercent', 'rotation', 'scale', 'scaleX', 'scaleY',
-    'opacity', 'autoAlpha', 'duration', 'ease', 'delay',
+    'x','y','xPercent','yPercent','rotation','scale','scaleX','scaleY',
+    'opacity','autoAlpha','duration','ease','delay',
   ];
 
-  editor.innerHTML = editableProps
-    .map((prop) => {
-      const val = anim.vars[prop] !== undefined ? anim.vars[prop] : '';
-      const tooltip = PROP_TOOLTIPS[prop] || prop;
-      return `
-        <div class="prop-row">
-          <label class="prop-label" data-tooltip="${escapeAttr(tooltip)}">${prop}</label>
-          <input class="prop-input" type="text" name="${prop}" value="${escapeAttr(String(val))}" placeholder="unchanged">
-        </div>
-      `;
-    })
-    .join('');
+  editor.innerHTML = editableProps.map((prop) => {
+    const val     = anim.vars[prop] !== undefined ? anim.vars[prop] : '';
+    const tooltip = PROP_TOOLTIPS[prop] || prop;
+    return `
+      <div class="prop-row">
+        <label class="prop-label" data-tooltip="${escapeAttr(tooltip)}">${prop}</label>
+        <input class="prop-input" type="text" name="${prop}" value="${escapeAttr(String(val))}" placeholder="unchanged">
+      </div>
+    `;
+  }).join('');
 
   modal.style.display = 'flex';
 
@@ -946,20 +1008,20 @@ function openPropEditor(anim) {
 }
 
 const PROP_TOOLTIPS = {
-  x: 'Horizontal movement in pixels (uses CSS transform translateX, GPU-accelerated). Preferred over left/margin-left.',
-  y: 'Vertical movement in pixels (uses CSS transform translateY, GPU-accelerated). Preferred over top.',
-  xPercent: "Horizontal movement as a percentage of the element's own width. Useful for centering tricks.",
-  yPercent: "Vertical movement as a percentage of the element's own height.",
-  rotation: 'Rotation in degrees. 360 = full rotation. Negative values rotate counter-clockwise.',
-  scale: '1 = original size, 0.5 = half size, 2 = double size. Uniform scale on both axes.',
-  scaleX: 'Horizontal scale only.',
-  scaleY: 'Vertical scale only.',
-  opacity: 'CSS opacity from 0 (invisible) to 1 (fully visible). Element stays in tab order even at 0.',
-  autoAlpha: 'GSAP combined opacity + CSS visibility. At 0, sets visibility:hidden (removes from tab order). Above 0, restores visibility:visible.',
-  duration: 'How long the animation takes in seconds. Default is 0.5s in GSAP 3.',
-  ease: 'Easing function. Examples: "power2.out" (decelerates), "elastic.out(1,0.3)" (bounces), "none" (linear).',
-  delay: 'Seconds to wait before starting. For sequencing inside timelines, prefer the position parameter instead.',
-  overwrite: 'Controls what happens when a new tween targets the same property on the same element as an existing tween. true = kill all existing tweens on that target immediately. "auto" = only kill tweens that conflict on the specific property being animated (safer, recommended).',
+  x:          'Horizontal movement in pixels (CSS transform translateX — GPU-accelerated). Preferred over left/margin-left.',
+  y:          'Vertical movement in pixels (CSS transform translateY — GPU-accelerated). Preferred over top.',
+  xPercent:   "Horizontal movement as a percentage of the element's own width. Useful for centring tricks.",
+  yPercent:   "Vertical movement as a percentage of the element's own height.",
+  rotation:   'Rotation in degrees. 360 = full rotation. Negative values rotate counter-clockwise.',
+  scale:      '1 = original size, 0.5 = half size, 2 = double size. Uniform scale on both axes.',
+  scaleX:     'Horizontal scale only.',
+  scaleY:     'Vertical scale only.',
+  opacity:    'CSS opacity from 0 (invisible) to 1 (fully visible). Element remains in tab order even at 0.',
+  autoAlpha:  'GSAP combined opacity + CSS visibility. At 0, sets visibility:hidden (removes from tab order). Above 0, restores visibility:visible.',
+  duration:   'How long the animation takes in seconds. Default is 0.5s in GSAP 3.',
+  ease:       'Easing function. Examples: "power2.out" (decelerates), "elastic.out(1,0.3)" (bounces), "none" (linear).',
+  delay:      'Seconds to wait before starting. For sequencing inside timelines, prefer the position parameter instead.',
+  overwrite:  'Controls what happens when a new tween targets the same property on the same element. true = kill all existing tweens. "auto" = only kill conflicting properties (recommended).',
 };
 
 document.getElementById('modal-close').addEventListener('click', () => {
@@ -978,9 +1040,9 @@ function sendCommand(cmd) {
 }
 
 function showInjectResult(msg) {
-  const el = document.getElementById('js-inject-result');
+  const el       = document.getElementById('js-inject-result');
   el.style.display = '';
-  el.className = `inject-result ${msg.success ? 'success' : 'error'}`;
+  el.className   = `inject-result ${msg.success ? 'success' : 'error'}`;
   el.textContent = msg.success ? msg.message || '✓ Executed successfully' : `✕ Error: ${msg.error}`;
   setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
@@ -1000,24 +1062,17 @@ function addToHistory(type, code) {
 }
 
 function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
+  if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// escapeAttr: for values placed inside HTML attribute quotes
 function escapeAttr(str) {
-  if (str === null || str === undefined) return '';
+  if (str == null) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ── Apply saved overrides on panel load ───────────────────────────────────────
@@ -1025,7 +1080,7 @@ chrome.devtools.inspectedWindow.eval('window.location.href', (pageUrl) => {
   if (!pageUrl) return;
   chrome.storage.local.get(`override_${pageUrl}`, (items) => {
     const override = items[`override_${pageUrl}`];
-    if (override && override.active && override.code) {
+    if (override?.active && override.code) {
       sendCommand({ command: 'inject_js', code: override.code });
     }
   });
