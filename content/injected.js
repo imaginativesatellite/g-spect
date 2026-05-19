@@ -120,7 +120,7 @@
     const results = [];
     const seen = new Set();
 
-    function walkTimeline(tl, depth) {
+    function walkTimeline(tl, depth, parentId) {
       if (!tl || seen.has(tl)) return;
       seen.add(tl);
 
@@ -155,6 +155,7 @@
 
         results.push({
           id: child._gsapInspectorId,
+          parentId: parentId || null,
           type: isTimeline ? 'timeline' : 'tween',
           depth,
           targetSelector,
@@ -171,11 +172,11 @@
           reversed,
         });
 
-        if (isTimeline) walkTimeline(child, depth + 1);
+        if (isTimeline) walkTimeline(child, depth + 1, child._gsapInspectorId);
       });
     }
 
-    walkTimeline(window.gsap.globalTimeline, 0);
+    walkTimeline(window.gsap.globalTimeline, 0, null);
     return results;
   }
 

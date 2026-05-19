@@ -375,15 +375,97 @@ body {
 /* ── View toggle (List / Timeline) ───────────────────────────────────────── */
 .view-toggle {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 10px;
   flex-shrink: 0;
+}
+
+.view-toggle-sep {
+  flex: 1;
 }
 
 .view-btn.active {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+
+/* ── Timeline chevron + children ─────────────────────────────────────────── */
+.tl-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 9px;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.15s, color 0.15s;
+  border-radius: 2px;
+}
+
+.tl-chevron:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.tl-chevron.open {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+.anim-children {
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+  margin-left: 4px;
+}
+
+.anim-children.open {
+  display: flex;
+}
+
+.anim-child-item {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.anim-child-item:hover {
+  border-color: var(--accent);
+}
+
+.anim-child-item.inspector-highlight {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Collapsed: hide controls row, only first line visible */
+.anim-item.collapsed .anim-controls {
+  display: none;
+}
+
+.anim-item.collapsed .anim-children {
+  display: none !important;
+}
+
+.anim-child-item.collapsed .anim-controls {
+  display: none;
 }
 
 /* ── Playback bar ─────────────────────────────────────────────────────────── */

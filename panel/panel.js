@@ -90,20 +90,25 @@ function positionTip(host) {
   const th = tip.offsetHeight;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const M = 8; // margin from edges
+  const M = 8;
 
-  // Default: above the element, horizontally centred
   let top = rect.top - th - M;
-  let left = rect.left + rect.width / 2 - tw / 2;
+
+  // For wide elements (flex:1 spans, labels) anchor near the left edge
+  // where the text actually starts, not the centre of the empty space.
+  let left;
+  if (rect.width > 200) {
+    left = rect.left + M;
+  } else {
+    left = rect.left + rect.width / 2 - tw / 2;
+  }
 
   // Flip below if not enough room above
   if (top < M) top = rect.bottom + M;
 
-  // Clamp horizontally within viewport
+  // Clamp within viewport
   if (left < M) left = M;
   if (left + tw > vw - M) left = vw - tw - M;
-
-  // Final vertical clamp
   if (top < M) top = M;
   if (top + th > vh - M) top = vh - th - M;
 
@@ -267,12 +272,14 @@ const PLUGIN_TOOLTIPS = {
 function applyAnimFilter(anims) {
   switch (animFilter) {
     case 'load-in':
-      // One-shot: not scroll-linked, repeat !== -1, not paused at start
       return anims.filter((a) => !a.isScrollLinked && a.repeat !== -1 && a.type === 'tween');
     case 'scroll':
       return anims.filter((a) => a.isScrollLinked);
     case 'looping':
       return anims.filter((a) => a.repeat === -1);
+    case 'hover':
+      // Standard GSAP hover pattern: created paused, not yet played (progress 0)
+      return anims.filter((a) => a.paused && a.progress === 0 && a.repeat !== -1);
     case 'paused':
       return anims.filter((a) => a.paused);
     case 'timelines':
@@ -281,6 +288,19 @@ function applyAnimFilter(anims) {
       return anims;
   }
 }
+
+// ── Collapse / Expand all ─────────────────────────────────────────────────────
+document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  document.querySelectorAll('#anim-list .anim-item, #anim-list .anim-child-item').forEach((el) =>
+    el.classList.add('collapsed')
+  );
+});
+
+document.getElementById('btn-expand-all').addEventListener('click', () => {
+  document.querySelectorAll('#anim-list .anim-item, #anim-list .anim-child-item').forEach((el) =>
+    el.classList.remove('collapsed')
+  );
+});
 
 function renderAnimations(data) {
   const list = document.getElementById('anim-list');
@@ -307,18 +327,19 @@ function renderAnimations(data) {
     list.innerHTML = '';
     animItemMap.clear();
     filtered.forEach((anim) => {
-      const item = buildAnimItem(anim);
+      const item = buildAnimItem(anim, data.animations);
       animItemMap.set(anim.id, item);
       list.appendChild(item);
     });
   } else {
-    filtered.forEach((anim) => patchAnimItem(anim, animItemMap.get(anim.id)));
+    // Patch top-level items and any visible child items
+    data.animations.forEach((anim) => patchAnimItem(anim, animItemMap.get(anim.id)));
   }
 
   if (currentView === 'timeline') renderTimelineView(data);
 }
 
-function buildAnimItem(anim) {
+function buildAnimItem(anim, allAnimations) {
   const item = document.createElement('div');
   item.className = 'anim-item';
   item.dataset.id = anim.id;
@@ -399,10 +420,116 @@ function buildAnimItem(anim) {
     }
   });
 
+  // Timeline children (nested tweens)
+  if (anim.type === 'timeline' && allAnimations) {
+    const children = allAnimations.filter((a) => a.parentId === anim.id);
+    if (children.length) {
+      // Add chevron to the top row
+      const rowTop = item.querySelector('.anim-row-top');
+      const chevron = document.createElement('button');
+      chevron.className = 'tl-chevron';
+      chevron.textContent = '▶';
+      chevron.dataset.tooltip = `Expand to see ${children.length} tween${children.length > 1 ? 's' : ''} inside this timeline.`;
+      rowTop.insertBefore(chevron, rowTop.firstChild);
+
+      // Build children container
+      const childrenEl = document.createElement('div');
+      childrenEl.className = 'anim-children';
+
+      children.forEach((child) => {
+        const childItem = buildChildItem(child);
+        animItemMap.set(child.id, childItem);
+        childrenEl.appendChild(childItem);
+      });
+
+      item.appendChild(childrenEl);
+
+      chevron.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = childrenEl.classList.toggle('open');
+        chevron.classList.toggle('open', open);
+        chevron.dataset.tooltip = open
+          ? `Collapse — hide the ${children.length} tween${children.length > 1 ? 's' : ''} inside this timeline.`
+          : `Expand to see ${children.length} tween${children.length > 1 ? 's' : ''} inside this timeline.`;
+      });
+    }
+  }
+
   // Element inspector hover
   item.addEventListener('mouseenter', () => {
     if (!elementInspectorActive) return;
     sendCommand({ command: 'highlight_element', id: anim.id, label: anim.targetSelector || 'animation' });
+  });
+  item.addEventListener('mouseleave', () => {
+    if (!elementInspectorActive) return;
+    sendCommand({ command: 'unhighlight_element' });
+  });
+
+  return item;
+}
+
+function buildChildItem(anim) {
+  const item = document.createElement('div');
+  item.className = 'anim-child-item';
+  item.dataset.id = anim.id;
+
+  const stateClass = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
+  const stateLabel = anim.paused ? 'Paused' : anim.progress >= 1 ? 'Complete' : 'Playing';
+  const animatedProps = Object.keys(anim.vars)
+    .filter((k) => !['ease', 'duration', 'delay', 'repeat', 'yoyo', 'stagger'].includes(k));
+  const propDisplay = animatedProps.join(', ') || 'no props';
+  const propTooltip = animatedProps.length
+    ? `Animated properties: ${propDisplay}`
+    : 'No standard animated properties detected. May target plugin-specific values.';
+  const targetTooltip = anim.targetSelector
+    ? 'The CSS selector of the element being animated.'
+    : 'Anonymous target — element has no id or class, or this targets a JS object.';
+
+  item.innerHTML = `
+    <div class="anim-row-top">
+      <span class="dot ${stateClass}" data-tooltip="Animation state: ${stateLabel}"></span>
+      <span class="anim-type-tag tween" data-tooltip="A tween is a single animation instruction.">tween</span>
+      <span class="anim-target" data-tooltip="${escapeAttr(targetTooltip)}">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
+      <span class="anim-props text-secondary" data-tooltip="${escapeAttr(propTooltip)}">${escapeHtml(propDisplay)}</span>
+      <span class="anim-duration text-secondary"
+        data-tooltip="Duration of this tween in seconds.">${anim.duration.toFixed(2)}s</span>
+      <span class="anim-ease text-secondary"
+        data-tooltip="Easing function for this tween.">${escapeHtml(anim.vars.ease || 'default')}</span>
+    </div>
+    <div class="anim-controls">
+      <button class="btn btn-icon anim-btn" data-cmd="anim_restart" data-id="${anim.id}"
+        data-tooltip="Restart this tween.">⏮</button>
+      <button class="btn btn-icon anim-btn" data-cmd="anim_play" data-id="${anim.id}"
+        data-tooltip="Play this tween.">▶</button>
+      <button class="btn btn-icon anim-btn" data-cmd="anim_pause" data-id="${anim.id}"
+        data-tooltip="Pause this tween.">⏸</button>
+      <button class="btn btn-icon anim-btn" data-cmd="anim_reverse" data-id="${anim.id}"
+        data-tooltip="Reverse this tween.">◀</button>
+      <input type="range" class="scrub-range anim-scrub" min="0" max="1" step="0.01"
+        value="${anim.progress}" data-id="${anim.id}"
+        data-tooltip="Scrub this tween's progress.">
+      <button class="btn btn-sm edit-btn" data-id="${anim.id}"
+        data-tooltip="Edit this tween's properties.">Edit</button>
+    </div>
+  `;
+
+  item.querySelectorAll('.anim-btn').forEach((btn) => {
+    btn.addEventListener('click', () =>
+      sendCommand({ command: btn.dataset.cmd, id: btn.dataset.id })
+    );
+  });
+  item.querySelector('.anim-scrub').addEventListener('input', (e) => {
+    sendCommand({ command: 'anim_set_progress', id: e.target.dataset.id, value: parseFloat(e.target.value) });
+  });
+  item.querySelector('.edit-btn').addEventListener('click', () => {
+    if (lastData) {
+      const a = lastData.animations.find((x) => x.id === anim.id);
+      if (a) openPropEditor(a);
+    }
+  });
+  item.addEventListener('mouseenter', () => {
+    if (!elementInspectorActive) return;
+    sendCommand({ command: 'highlight_element', id: anim.id, label: anim.targetSelector || 'tween' });
   });
   item.addEventListener('mouseleave', () => {
     if (!elementInspectorActive) return;

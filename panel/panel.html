@@ -127,10 +127,15 @@
           class="scrub-range">
       </div>
 
-      <!-- List / Timeline view toggle -->
+      <!-- List / Timeline view toggle + collapse controls -->
       <div class="view-toggle">
         <button class="btn view-btn active" id="btn-list-view">List</button>
         <button class="btn view-btn" id="btn-timeline-view">Timeline</button>
+        <span class="view-toggle-sep"></span>
+        <button class="btn btn-sm" id="btn-collapse-all"
+          data-tooltip="Collapse all animation cards to show only the top row. Good for scanning a long list quickly.">Collapse all</button>
+        <button class="btn btn-sm" id="btn-expand-all"
+          data-tooltip="Expand all animation cards to show their playback controls.">Expand all</button>
       </div>
 
       <!-- Animation filters -->
@@ -143,6 +148,8 @@
           data-tooltip="Animations whose progress is tied to the scroll position via ScrollTrigger's scrub option.">Scroll-linked</button>
         <button class="filter-chip" data-filter="looping"
           data-tooltip="Animations set to repeat indefinitely (repeat: -1). These loop continuously without stopping.">Looping</button>
+        <button class="filter-chip" data-filter="hover"
+          data-tooltip="Animations that start paused at progress 0 — the standard GSAP pattern for hover-triggered animations (created paused, then played on mouseenter).">Hover</button>
         <button class="filter-chip" data-filter="paused"
           data-tooltip="Animations currently in a paused state. These may be waiting to be triggered or were manually paused.">Paused</button>
         <button class="filter-chip" data-filter="timelines"
