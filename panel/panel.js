@@ -420,6 +420,12 @@ function buildAnimItem(anim, allAnimations) {
     }
   });
 
+  // Click the top row to toggle collapse on that item individually
+  item.querySelector('.anim-row-top').addEventListener('click', (e) => {
+    if (e.target.closest('button') || e.target.closest('input')) return;
+    item.classList.toggle('collapsed');
+  });
+
   // Timeline children (nested tweens)
   if (anim.type === 'timeline' && allAnimations) {
     const children = allAnimations.filter((a) => a.parentId === anim.id);
@@ -512,6 +518,12 @@ function buildChildItem(anim) {
         data-tooltip="Edit this tween's properties.">Edit</button>
     </div>
   `;
+
+  // Click top row to individually expand/collapse this child
+  item.querySelector('.anim-row-top').addEventListener('click', (e) => {
+    if (e.target.closest('button') || e.target.closest('input')) return;
+    item.classList.toggle('collapsed');
+  });
 
   item.querySelectorAll('.anim-btn').forEach((btn) => {
     btn.addEventListener('click', () =>

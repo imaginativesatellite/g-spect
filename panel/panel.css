@@ -676,6 +676,14 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.anim-row-top button,
+.anim-row-top input {
+  cursor: default;
+  user-select: auto;
 }
 
 .anim-type {
