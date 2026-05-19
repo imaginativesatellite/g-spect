@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="panel">
+
+    <!-- ── Header bar: always visible ─────────────────────────────────────── -->
+    <div class="panel-header">
+      <span class="panel-title">GSAP Inspector</span>
+      <span id="gsap-version-badge" class="badge" style="display:none"></span>
+      <span id="webflow-badge" class="badge badge-webflow" style="display:none">Webflow</span>
+      <span class="header-spacer"></span>
+      <button id="btn-reset" class="btn btn-reset"
+        data-tooltip="Kill all GSAP animations, clear saved overrides for this URL, and reload the page. Cannot be undone.">
+        Reset &amp; Reload
+      </button>
+    </div>
+
+    <!-- ── Tab bar ─────────────────────────────────────────────────────────── -->
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="overview"      role="tab" aria-selected="true">Overview</button>
+      <button class="tab"        data-tab="animations"    role="tab">Animations</button>
+      <button class="tab"        data-tab="scrolltrigger" role="tab">ScrollTrigger</button>
+      <button class="tab"        data-tab="linter"        role="tab">Linter</button>
+      <button class="tab"        data-tab="code"          role="tab">Code</button>
+      <button class="tab"        data-tab="overrides"     role="tab">Overrides</button>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- OVERVIEW TAB                                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-overview" class="tab-content active">
+      <div id="gsap-not-found" class="empty-state" style="display:none">
+        <p>GSAP not detected on this page.</p>
+        <p class="text-secondary">
+          Open this panel on a page that uses GSAP. If the page has a strict
+          Content Security Policy, script injection may be blocked.
+        </p>
+      </div>
+
+      <div id="overview-content">
+        <div class="overview-grid">
+          <div class="overview-card" id="card-version">
+            <div class="card-label"
+              data-tooltip="The version of GSAP (GreenSock Animation Platform) loaded on this page. GSAP 3 (released 2019) has a unified API — gsap.to(), gsap.timeline(), etc. GSAP 2 used separate classes: TweenMax, TimelineMax.">
+              GSAP Version
+            </div>
+            <div class="card-value" id="ov-version">—</div>
+          </div>
+          <div class="overview-card" id="card-platform">
+            <div class="card-label"
+              data-tooltip="The platform or CMS this site appears to be built on, detected from page globals and data attributes.">
+              Platform
+            </div>
+            <div class="card-value" id="ov-platform">—</div>
+          </div>
+          <div class="overview-card" id="card-anims">
+            <div class="card-label"
+              data-tooltip="Total number of tweens and timelines detected in gsap.globalTimeline — the master timeline that all GSAP animations are children of.">
+              Animations
+            </div>
+            <div class="card-value" id="ov-anim-count">—</div>
+          </div>
+          <div class="overview-card" id="card-sts">
+            <div class="card-label"
+              data-tooltip="ScrollTrigger is a GSAP plugin that links animations to the scroll position. Each 'trigger' is one scroll-linked animation or action.">
+              ScrollTriggers
+            </div>
+            <div class="card-value" id="ov-st-count">—</div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          Loaded Plugins
+          <span data-tooltip="GSAP plugins extend the core with additional capabilities. They must be registered with gsap.registerPlugin() before use. Club GSAP plugins (SplitText, MorphSVG, DrawSVG) require a GreenSock membership.">?</span>
+        </div>
+        <div id="ov-plugins" class="plugin-list"></div>
+
+        <div id="ix2-warning" class="lint-item lint-warning" style="display:none">
+          <strong>Webflow Interactions (ix2) detected alongside GSAP.</strong>
+          Both systems may animate the same elements, causing conflicts. If you see
+          unexpected animation behavior, check whether ix2 and your custom GSAP are
+          targeting the same elements.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- ANIMATIONS TAB                                                       -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-animations" class="tab-content">
+
+      <!-- Global playback controls -->
+      <div class="playback-bar">
+        <span class="playback-label"
+          data-tooltip="Controls GSAP's master timeline — the parent of all animations on the page. Pausing it freezes everything simultaneously.">
+          Global Playback
+        </span>
+        <button id="btn-restart-all" class="btn btn-icon"
+          data-tooltip="Restart all animations from the beginning.">⏮</button>
+        <button id="btn-play-all" class="btn btn-icon"
+          data-tooltip="Resume all paused animations.">▶</button>
+        <button id="btn-pause-all" class="btn btn-icon"
+          data-tooltip="Freeze all animations at their current position.">⏸</button>
+        <button id="btn-reverse-all" class="btn btn-icon"
+          data-tooltip="Play all animations backwards from their current position.">◀</button>
+
+        <span class="speed-label"
+          data-tooltip="timeScale controls how fast GSAP plays animations. 0.5× = half speed (good for debugging). 2× = double speed.">
+          Speed:
+        </span>
+        <div class="speed-btns">
+          <button class="btn speed-btn" data-speed="0.25">0.25×</button>
+          <button class="btn speed-btn" data-speed="0.5">0.5×</button>
+          <button class="btn speed-btn active" data-speed="1">1×</button>
+          <button class="btn speed-btn" data-speed="2">2×</button>
+        </div>
+
+        <span class="scrub-label"
+          data-tooltip="Drag to scrub through the master timeline. Sets gsap.globalTimeline.progress() from 0 (start) to 1 (end).">
+          Scrub:
+        </span>
+        <input type="range" id="global-scrub" min="0" max="1" step="0.01" value="0"
+          class="scrub-range">
+      </div>
+
+      <!-- List / Timeline view toggle -->
+      <div class="view-toggle">
+        <button class="btn view-btn active" id="btn-list-view">List</button>
+        <button class="btn view-btn" id="btn-timeline-view">Timeline</button>
+      </div>
+
+      <!-- List view -->
+      <div id="anim-list-view">
+        <div id="anim-list" class="anim-list"></div>
+      </div>
+
+      <!-- Timeline / Gantt view -->
+      <div id="anim-timeline-view" style="display:none">
+        <div id="timeline-container" class="tl-container"></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- SCROLLTRIGGER TAB                                                    -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-scrolltrigger" class="tab-content">
+      <div class="st-header">
+        <span class="section-header">ScrollTrigger Instances</span>
+        <label class="toggle-row"
+          data-tooltip="Shows visual marker lines on the page indicating where each ScrollTrigger starts and ends. Extremely helpful for debugging scroll positions. Note: toggling markers requires killing and recreating triggers, which briefly interrupts animations.">
+          All Markers
+          <span class="toggle-switch">
+            <input type="checkbox" id="markers-all">
+            <span class="toggle-slider"></span>
+          </span>
+        </label>
+        <button id="btn-st-refresh" class="btn"
+          data-tooltip="Calls ScrollTrigger.refresh() — recalculates all trigger positions. Use this after the page layout changes (images load, accordions open, etc.).">
+          Refresh All
+        </button>
+      </div>
+
+      <div id="st-list" class="st-list">
+        <div class="empty-state">
+          No ScrollTrigger instances detected. ScrollTrigger must be loaded and
+          registered to appear here.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- LINTER TAB                                                           -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-linter" class="tab-content">
+      <div class="lint-header">
+        <span class="section-header">GSAP Linter</span>
+        <button id="btn-lint-run" class="btn btn-primary"
+          data-tooltip="Re-scans the page and runs all linting rules against the current state of GSAP animations.">
+          Re-run
+        </button>
+      </div>
+      <div id="lint-results" class="lint-results">
+        <div class="empty-state">
+          Linter will run automatically when GSAP is detected.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- CODE TAB                                                             -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-code" class="tab-content">
+
+      <div class="code-section">
+        <div class="section-header">
+          JavaScript
+          <span data-tooltip="Code entered here runs directly in the page's JavaScript context — the same scope as window.gsap, window.ScrollTrigger, etc. It has full access to all GSAP globals.">?</span>
+        </div>
+        <textarea id="js-editor" class="code-editor"
+          placeholder="// Type any GSAP JavaScript here&#10;// e.g. gsap.to('.box', { x: 100, duration: 1 })&#10;// All globals (gsap, ScrollTrigger, etc.) are available"></textarea>
+        <div class="code-actions">
+          <button id="btn-inject-js" class="btn btn-primary"
+            data-tooltip="Executes the JavaScript above in the page context immediately.">
+            Inject &amp; Run
+          </button>
+          <button id="btn-save-js" class="btn"
+            data-tooltip="Saves this code to run automatically every time you visit this URL. Saved code runs after GSAP loads on the page.">
+            Save for this URL
+          </button>
+          <button id="btn-copy-webflow" class="btn"
+            data-tooltip="Copies the code wrapped in &lt;script&gt; tags, formatted for pasting into Webflow's Page Settings → Custom Code → Before &lt;/body&gt; section.">
+            Copy as Webflow Snippet
+          </button>
+        </div>
+        <div id="js-inject-result" class="inject-result" style="display:none"></div>
+      </div>
+
+      <div class="code-section">
+        <div class="section-header">
+          CSS
+          <span data-tooltip="Injects a &lt;style&gt; tag into the page. Useful for overriding styles on animated elements, adding will-change, or debugging layout issues. Injected styles are tagged with data-gsap-inspector so they can be removed by the Reset button.">?</span>
+        </div>
+        <textarea id="css-editor" class="code-editor code-editor-sm"
+          placeholder="/* Type CSS here */&#10;/* e.g. .hero { will-change: transform; } */"></textarea>
+        <div class="code-actions">
+          <button id="btn-inject-css" class="btn btn-primary">Inject CSS</button>
+        </div>
+        <div id="css-inject-result" class="inject-result" style="display:none"></div>
+      </div>
+
+      <div class="code-section">
+        <div class="section-header">Session History</div>
+        <div id="inject-history" class="inject-history">
+          <div class="empty-state">No code injected this session.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- OVERRIDES TAB                                                        -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-overrides" class="tab-content">
+      <div class="overrides-header">
+        <span class="section-header">Saved Overrides</span>
+        <button id="btn-export-overrides" class="btn"
+          data-tooltip="Download all saved overrides as a JSON file. Share with teammates or back up your work.">
+          Export All
+        </button>
+        <button id="btn-clear-all-overrides" class="btn btn-danger"
+          data-tooltip="Delete ALL saved overrides for ALL URLs. This cannot be undone.">
+          Clear All
+        </button>
+      </div>
+      <div id="overrides-list" class="overrides-list">
+        <div class="empty-state">
+          No saved overrides yet. Use the Code tab to inject and save JavaScript
+          for any URL.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.panel -->
+
+  <!-- ── Property editor modal ──────────────────────────────────────────── -->
+  <div id="prop-editor-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span id="modal-title">Edit Tween</span>
+        <button id="modal-close" class="btn btn-icon" title="Close">✕</button>
+      </div>
+      <div id="prop-editor" class="prop-editor"></div>
+      <div class="modal-actions">
+        <button id="btn-apply-props" class="btn btn-primary">Apply Changes</button>
+        <button id="btn-cancel-props" class="btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>
