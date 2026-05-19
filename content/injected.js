@@ -22,7 +22,6 @@
       clearInterval(waitForGSAP);
       init();
     } else if (attempts > 100) {
-      // ~5 seconds elapsed with no GSAP
       clearInterval(waitForGSAP);
       send({ type: 'gsap_not_found' });
     }
@@ -31,16 +30,14 @@
   // ── Initialise once GSAP is present ────────────────────────────────────────
   function init() {
     sendInspectionData();
-    // Poll for changes every 500ms so the panel stays in sync
     setInterval(sendInspectionData, 500);
   }
 
-  // ── Helper: GSAP version ───────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function getGSAPVersion() {
     return window.gsap ? window.gsap.version || null : null;
   }
 
-  // ── Helper: Webflow detection ──────────────────────────────────────────────
   function isWebflow() {
     return !!(
       window.Webflow ||
@@ -49,7 +46,6 @@
     );
   }
 
-  // ── Helper: Webflow Interactions 2 detection ───────────────────────────────
   function hasIx2() {
     return !!(
       (window.Webflow && window.Webflow.ix2) ||
@@ -60,23 +56,22 @@
     );
   }
 
-  // ── Helper: loaded GSAP plugins ───────────────────────────────────────────
   function getLoadedPlugins() {
     const plugins = [];
     const checks = [
-      { name: 'ScrollTrigger', global: 'ScrollTrigger' },
-      { name: 'ScrollToPlugin', global: 'ScrollToPlugin' },
-      { name: 'Draggable', global: 'Draggable' },
-      { name: 'Flip', global: 'Flip' },
+      { name: 'ScrollTrigger',    global: 'ScrollTrigger' },
+      { name: 'ScrollToPlugin',   global: 'ScrollToPlugin' },
+      { name: 'Draggable',        global: 'Draggable' },
+      { name: 'Flip',             global: 'Flip' },
       { name: 'MotionPathPlugin', global: 'MotionPathPlugin' },
-      { name: 'MorphSVGPlugin', global: 'MorphSVGPlugin' },
-      { name: 'DrawSVGPlugin', global: 'DrawSVGPlugin' },
-      { name: 'SplitText', global: 'SplitText' },
-      { name: 'GSDevTools', global: 'GSDevTools' },
-      { name: 'Observer', global: 'Observer' },
-      { name: 'TextPlugin', global: 'TextPlugin' },
-      { name: 'EaselPlugin', global: 'EaselPlugin' },
-      { name: 'PixiPlugin', global: 'PixiPlugin' },
+      { name: 'MorphSVGPlugin',   global: 'MorphSVGPlugin' },
+      { name: 'DrawSVGPlugin',    global: 'DrawSVGPlugin' },
+      { name: 'SplitText',        global: 'SplitText' },
+      { name: 'GSDevTools',       global: 'GSDevTools' },
+      { name: 'Observer',         global: 'Observer' },
+      { name: 'TextPlugin',       global: 'TextPlugin' },
+      { name: 'EaselPlugin',      global: 'EaselPlugin' },
+      { name: 'PixiPlugin',       global: 'PixiPlugin' },
     ];
     checks.forEach(({ name, global: g }) => {
       if (
@@ -90,7 +85,6 @@
     return plugins;
   }
 
-  // ── Helper: sanitize tween vars for serialisation ──────────────────────────
   function sanitizeVars(vars) {
     const safe = {};
     const animProps = [
@@ -112,7 +106,6 @@
     return safe;
   }
 
-  // ── Helper: build a CSS selector from a DOM element ───────────────────────
   function selectorFromElement(el) {
     if (!(el instanceof Element)) return '';
     if (el.id) return '#' + el.id;
@@ -121,10 +114,9 @@
     return el.tagName ? el.tagName.toLowerCase() : 'element';
   }
 
-  // ── Walk gsap.globalTimeline and collect animation data ────────────────────
+  // ── Walk globalTimeline and collect animations ─────────────────────────────
   function getAnimations() {
     if (!window.gsap || !window.gsap.globalTimeline) return [];
-
     const results = [];
     const seen = new Set();
 
@@ -140,7 +132,6 @@
       }
 
       children.forEach((child) => {
-        // Stamp a stable inspector ID
         if (!child._gsapInspectorId) {
           child._gsapInspectorId = Math.random().toString(36).slice(2);
         }
@@ -148,7 +139,6 @@
         const isTimeline =
           typeof child.getChildren === 'function' || Array.isArray(child._children);
 
-        // Derive a human-readable target selector
         const target = child._targets && child._targets[0];
         let targetSelector = '';
         if (target instanceof Element) {
@@ -157,14 +147,11 @@
           targetSelector = 'object';
         }
 
-        let progress = 0;
-        try { progress = typeof child.progress === 'function' ? child.progress() : 0; } catch (e) {}
-        let paused = false;
-        try { paused = typeof child.paused === 'function' ? child.paused() : false; } catch (e) {}
-        let reversed = false;
-        try { reversed = typeof child.reversed === 'function' ? child.reversed() : false; } catch (e) {}
-        let duration = 0;
-        try { duration = typeof child.duration === 'function' ? child.duration() : 0; } catch (e) {}
+        let progress = 0, paused = false, reversed = false, duration = 0;
+        try { progress  = typeof child.progress  === 'function' ? child.progress()  : 0;     } catch (e) {}
+        try { paused    = typeof child.paused     === 'function' ? child.paused()    : false;  } catch (e) {}
+        try { reversed  = typeof child.reversed   === 'function' ? child.reversed()  : false;  } catch (e) {}
+        try { duration  = typeof child.duration   === 'function' ? child.duration()  : 0;     } catch (e) {}
 
         results.push({
           id: child._gsapInspectorId,
@@ -195,28 +182,23 @@
   // ── Collect ScrollTrigger instances ───────────────────────────────────────
   function getScrollTriggers() {
     if (!window.ScrollTrigger || typeof window.ScrollTrigger.getAll !== 'function') return [];
-    const all = window.ScrollTrigger.getAll();
-    return all.map((st) => {
+    return window.ScrollTrigger.getAll().map((st) => {
       if (!st._gsapInspectorId) {
         st._gsapInspectorId = Math.random().toString(36).slice(2);
       }
-      let triggerSelector = '';
-      if (st.trigger instanceof Element) {
-        triggerSelector = selectorFromElement(st.trigger);
-      }
       return {
         id: st._gsapInspectorId,
-        triggerSelector,
+        triggerSelector: st.trigger instanceof Element ? selectorFromElement(st.trigger) : '',
         start: (st.vars && st.vars.start) || 'top bottom',
         end: (st.vars && st.vars.end) || 'bottom top',
-        scrub: (st.vars && st.vars.scrub !== undefined) ? st.vars.scrub : false,
-        pin: (st.vars && st.vars.pin) ? true : false,
-        markers: (st.vars && st.vars.markers) ? true : false,
+        scrub: st.vars && st.vars.scrub !== undefined ? st.vars.scrub : false,
+        pin: !!(st.vars && st.vars.pin),
+        markers: !!(st.vars && st.vars.markers),
         progress: st.progress || 0,
         isActive: st.isActive || false,
-        snap: (st.vars && st.vars.snap) ? st.vars.snap : false,
+        snap: st.vars && st.vars.snap ? st.vars.snap : false,
         toggleActions: (st.vars && st.vars.toggleActions) || 'play none none none',
-        invalidateOnRefresh: (st.vars && st.vars.invalidateOnRefresh) ? true : false,
+        invalidateOnRefresh: !!(st.vars && st.vars.invalidateOnRefresh),
       };
     });
   }
@@ -226,16 +208,11 @@
     const gsap = window.gsap;
     if (!gsap) return;
 
-    let globalPaused = false;
-    let globalTimeScale = 1;
+    let globalPaused = false, globalTimeScale = 1;
     try {
       if (gsap.globalTimeline) {
-        globalPaused =
-          typeof gsap.globalTimeline.paused === 'function'
-            ? gsap.globalTimeline.paused()
-            : false;
-        globalTimeScale =
-          gsap.globalTimeline._ts !== undefined ? gsap.globalTimeline._ts : 1;
+        globalPaused    = typeof gsap.globalTimeline.paused    === 'function' ? gsap.globalTimeline.paused()    : false;
+        globalTimeScale = gsap.globalTimeline._ts !== undefined ? gsap.globalTimeline._ts : 1;
       }
     } catch (e) {}
 
@@ -251,19 +228,68 @@
         scrollTriggers: getScrollTriggers(),
         globalPaused,
         globalTimeScale,
-        usesContext: false, // heuristic; can't reliably detect from outside
+        usesContext: false,
       },
     });
   }
 
-  // ── Find a specific animation by inspector ID ──────────────────────────────
+  // ── Find animation by inspector ID ─────────────────────────────────────────
   function findAnim(id) {
     if (!window.gsap || !window.gsap.globalTimeline) return null;
     let all = [];
-    try {
-      all = window.gsap.globalTimeline.getChildren(true, true, true) || [];
-    } catch (e) {}
+    try { all = window.gsap.globalTimeline.getChildren(true, true, true) || []; } catch (e) {}
     return all.find((a) => a._gsapInspectorId === id) || null;
+  }
+
+  // ── Element highlight overlay ──────────────────────────────────────────────
+  function highlightEl(el, label) {
+    clearHighlight();
+    if (!(el instanceof Element)) return;
+
+    const rect = el.getBoundingClientRect();
+    if (!rect.width && !rect.height) return;
+
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-gsap-inspector-highlight', 'true');
+    Object.assign(overlay.style, {
+      position:      'fixed',
+      top:           rect.top    + 'px',
+      left:          rect.left   + 'px',
+      width:         rect.width  + 'px',
+      height:        rect.height + 'px',
+      outline:       '2px solid #3B82F6',
+      outlineOffset: '1px',
+      background:    'rgba(59,130,246,0.08)',
+      pointerEvents: 'none',
+      zIndex:        '2147483647',
+      boxSizing:     'border-box',
+    });
+
+    if (label) {
+      const badge = document.createElement('div');
+      Object.assign(badge.style, {
+        position:     'absolute',
+        top:          '-22px',
+        left:         '0',
+        background:   '#3B82F6',
+        color:        '#fff',
+        fontSize:     '10px',
+        fontFamily:   'system-ui, sans-serif',
+        padding:      '2px 6px',
+        borderRadius: '3px',
+        whiteSpace:   'nowrap',
+        pointerEvents:'none',
+        lineHeight:   '1.5',
+      });
+      badge.textContent = label;
+      overlay.appendChild(badge);
+    }
+
+    document.body.appendChild(overlay);
+  }
+
+  function clearHighlight() {
+    document.querySelectorAll('[data-gsap-inspector-highlight]').forEach((el) => el.remove());
   }
 
   // ── Command handler ────────────────────────────────────────────────────────
@@ -286,83 +312,79 @@
         break;
 
       case 'set_timescale':
-        if (window.gsap && window.gsap.globalTimeline) {
-          window.gsap.globalTimeline.timeScale(cmd.value);
-        }
+        if (window.gsap && window.gsap.globalTimeline) window.gsap.globalTimeline.timeScale(cmd.value);
         break;
 
       case 'set_progress':
-        if (window.gsap && window.gsap.globalTimeline) {
-          window.gsap.globalTimeline.progress(cmd.value);
-        }
+        if (window.gsap && window.gsap.globalTimeline) window.gsap.globalTimeline.progress(cmd.value);
         break;
 
-      case 'toggle_markers_all':
-        if (window.ScrollTrigger) {
-          const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
-          all.forEach((st) => {
-            st.vars.markers = cmd.value;
-            const animation = st.animation;
-            const vars = Object.assign({}, st.vars);
-            st.kill();
-            if (animation) {
-              window.ScrollTrigger.create(Object.assign({}, vars, { animation }));
-            } else {
-              window.ScrollTrigger.create(vars);
-            }
-          });
-          window.ScrollTrigger.refresh && window.ScrollTrigger.refresh();
-        }
+      // Preserve inspector IDs and insertion order when toggling all markers.
+      // Kill all first, then recreate in the same order with saved IDs.
+      case 'toggle_markers_all': {
+        if (!window.ScrollTrigger) break;
+        const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
+        // Snapshot everything before killing
+        const snapshots = all.map((st) => ({
+          savedId:   st._gsapInspectorId,
+          animation: st.animation,
+          vars:      Object.assign({}, st.vars, { markers: cmd.value }),
+        }));
+        all.forEach((st) => st.kill());
+        snapshots.forEach(({ savedId, animation, vars }) => {
+          const newSt = animation
+            ? window.ScrollTrigger.create(Object.assign({}, vars, { animation }))
+            : window.ScrollTrigger.create(vars);
+          // Re-stamp the same ID so panel order is stable
+          if (newSt && savedId) newSt._gsapInspectorId = savedId;
+        });
+        if (window.ScrollTrigger.refresh) window.ScrollTrigger.refresh();
         break;
+      }
 
-      case 'toggle_markers_one':
-        if (window.ScrollTrigger) {
-          const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
-          const st = all.find((s) => s._gsapInspectorId === cmd.id);
-          if (st) {
-            st.vars.markers = cmd.value;
-            const animation = st.animation;
-            const vars = Object.assign({}, st.vars);
-            st.kill();
-            if (animation) {
-              window.ScrollTrigger.create(Object.assign({}, vars, { animation }));
-            } else {
-              window.ScrollTrigger.create(vars);
-            }
-          }
+      // Same ID preservation for a single trigger.
+      case 'toggle_markers_one': {
+        if (!window.ScrollTrigger) break;
+        const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
+        const st = all.find((s) => s._gsapInspectorId === cmd.id);
+        if (st) {
+          const savedId   = st._gsapInspectorId;
+          const animation = st.animation;
+          const vars      = Object.assign({}, st.vars, { markers: cmd.value });
+          st.kill();
+          const newSt = animation
+            ? window.ScrollTrigger.create(Object.assign({}, vars, { animation }))
+            : window.ScrollTrigger.create(vars);
+          if (newSt && savedId) newSt._gsapInspectorId = savedId;
         }
         break;
+      }
 
       case 'anim_play': {
         const a = findAnim(cmd.id);
         if (a && typeof a.play === 'function') a.play();
         break;
       }
-
       case 'anim_pause': {
         const a = findAnim(cmd.id);
         if (a && typeof a.pause === 'function') a.pause();
         break;
       }
-
       case 'anim_reverse': {
         const a = findAnim(cmd.id);
         if (a && typeof a.reverse === 'function') a.reverse();
         break;
       }
-
       case 'anim_restart': {
         const a = findAnim(cmd.id);
         if (a && typeof a.restart === 'function') a.restart();
         break;
       }
-
       case 'anim_set_progress': {
         const a = findAnim(cmd.id);
         if (a && typeof a.progress === 'function') a.progress(cmd.value);
         break;
       }
-
       case 'anim_set_timescale': {
         const a = findAnim(cmd.id);
         if (a && typeof a.timeScale === 'function') a.timeScale(cmd.value);
@@ -372,8 +394,7 @@
       case 'inject_js': {
         try {
           // eslint-disable-next-line no-new-func
-          const fn = new Function(cmd.code);
-          fn();
+          new Function(cmd.code)();
           send({ type: 'inject_result', success: true });
         } catch (e) {
           send({ type: 'inject_result', success: false, error: e.message });
@@ -402,10 +423,40 @@
         if (window.ScrollTrigger) {
           try { window.ScrollTrigger.killAll(); } catch (e) {}
         }
+        clearHighlight();
         document.querySelectorAll('style[data-gsap-inspector]').forEach((s) => s.remove());
         send({ type: 'reset_complete' });
         break;
       }
+
+      // Element inspector: highlight the target elements of an animation
+      case 'highlight_element': {
+        clearHighlight();
+        const anim = findAnim(cmd.id);
+        if (anim && anim._targets) {
+          anim._targets.forEach((target) => {
+            if (target instanceof Element) highlightEl(target, cmd.label || '');
+          });
+        }
+        break;
+      }
+
+      // Element inspector: highlight the trigger element of a ScrollTrigger
+      case 'highlight_st': {
+        clearHighlight();
+        if (window.ScrollTrigger) {
+          const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
+          const st = all.find((s) => s._gsapInspectorId === cmd.id);
+          if (st && st.trigger instanceof Element) {
+            highlightEl(st.trigger, cmd.label || 'ScrollTrigger');
+          }
+        }
+        break;
+      }
+
+      case 'unhighlight_element':
+        clearHighlight();
+        break;
 
       default:
         break;
@@ -417,12 +468,7 @@
     if (e.data && e.data.__gsap_inspector_overrides__) {
       const { code } = e.data;
       if (code) {
-        try {
-          // eslint-disable-next-line no-new-func
-          new Function(code)();
-        } catch (err) {
-          console.warn('[GSAP Inspector] Override error:', err);
-        }
+        try { new Function(code)(); } catch (err) { console.warn('[GSAP Inspector] Override error:', err); } // eslint-disable-line no-new-func
       }
     }
   });
