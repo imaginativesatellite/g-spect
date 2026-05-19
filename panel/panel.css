@@ -487,6 +487,83 @@ body {
   margin-bottom: 12px;
 }
 
+/* ── Filter bar ───────────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 8px;
+  flex-shrink: 0;
+}
+
+.filter-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-right: 2px;
+  cursor: help;
+}
+
+.filter-chip {
+  padding: 2px 9px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.filter-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── Animation type tags ──────────────────────────────────────────────────── */
+.anim-type-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.anim-type-tag.timeline {
+  background: #7c3aed22;
+  color: var(--tip);
+  border: 1px solid #7c3aed33;
+}
+
+.anim-type-tag.tween {
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid #3b82f633;
+}
+
+/* highlighted row from reverse element inspector */
+.anim-item.inspector-highlight,
+.st-item.inspector-highlight {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* ── Animation list ───────────────────────────────────────────────────────── */
 .anim-list {
   display: flex;

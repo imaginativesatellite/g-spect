@@ -241,6 +241,52 @@
     return all.find((a) => a._gsapInspectorId === id) || null;
   }
 
+  // ── Reverse element inspector ──────────────────────────────────────────────
+  // When active, mouseover events on page elements are checked against all
+  // GSAP animations and ScrollTriggers. Matches are sent back to the panel.
+  let reverseInspectorActive = false;
+  let reverseDebounce = null;
+
+  function onPageMouseover(e) {
+    if (!reverseInspectorActive) return;
+    clearTimeout(reverseDebounce);
+    reverseDebounce = setTimeout(() => {
+      const el = e.target;
+      if (!(el instanceof Element)) return;
+
+      const animIds = [];
+      const stIds   = [];
+
+      // Check animations
+      if (window.gsap && window.gsap.globalTimeline) {
+        let all = [];
+        try { all = window.gsap.globalTimeline.getChildren(true, true, true) || []; } catch (_) {}
+        all.forEach((anim) => {
+          if (anim._targets && anim._targets.includes(el) && anim._gsapInspectorId) {
+            animIds.push(anim._gsapInspectorId);
+          }
+        });
+      }
+
+      // Check ScrollTriggers
+      if (window.ScrollTrigger && typeof window.ScrollTrigger.getAll === 'function') {
+        window.ScrollTrigger.getAll().forEach((st) => {
+          if (st.trigger === el && st._gsapInspectorId) {
+            stIds.push(st._gsapInspectorId);
+          }
+        });
+      }
+
+      if (animIds.length || stIds.length) {
+        send({ type: 'reverse_highlight', animIds, stIds });
+      } else {
+        send({ type: 'reverse_unhighlight' });
+      }
+    }, 80); // small debounce to avoid spamming on fast mouse moves
+  }
+
+  document.addEventListener('mouseover', onPageMouseover, { passive: true });
+
   // ── Element highlight overlay ──────────────────────────────────────────────
   function highlightEl(el, label) {
     clearHighlight();
@@ -456,6 +502,11 @@
 
       case 'unhighlight_element':
         clearHighlight();
+        break;
+
+      case 'set_reverse_inspector':
+        reverseInspectorActive = !!cmd.active;
+        if (!reverseInspectorActive) clearHighlight();
         break;
 
       default:

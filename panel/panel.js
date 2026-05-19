@@ -22,6 +22,10 @@ let stOrderIds = [];
 const animItemMap = new Map();
 let lastAnimIds = '';
 
+// Active filters
+let animFilter = 'all';
+let stFilter   = 'all';
+
 // Element inspector state
 let elementInspectorActive = false;
 
@@ -41,6 +45,15 @@ port.onMessage.addListener((msg) => {
         chrome.devtools.inspectedWindow.eval('window.location.reload()');
       }, 300);
       break;
+    // Reverse element inspector: page hovered element matched animations/STs
+    case 'reverse_highlight': {
+      highlightPanelRows(msg.animIds || [], msg.stIds || []);
+      break;
+    }
+    case 'reverse_unhighlight': {
+      clearPanelHighlights();
+      break;
+    }
     default:
       break;
   }
@@ -140,6 +153,26 @@ document.getElementById('btn-timeline-view').addEventListener('click', () => {
   if (lastData) renderTimelineView(lastData);
 });
 
+// ── Animation filter chips ────────────────────────────────────────────────────
+document.querySelectorAll('#anim-filter-bar .filter-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#anim-filter-bar .filter-chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    animFilter = chip.dataset.filter;
+    if (lastData) renderAnimations(lastData);
+  });
+});
+
+// ── ScrollTrigger filter chips ────────────────────────────────────────────────
+document.querySelectorAll('#st-filter-bar .filter-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#st-filter-bar .filter-chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+    stFilter = chip.dataset.filter;
+    if (lastData) renderScrollTriggers(lastData);
+  });
+});
+
 // ── Element inspector toggle ──────────────────────────────────────────────────
 const inspectorBtn = document.createElement('button');
 inspectorBtn.id = 'btn-element-inspector';
@@ -154,7 +187,12 @@ resetBtn.parentNode.insertBefore(inspectorBtn, resetBtn);
 inspectorBtn.addEventListener('click', () => {
   elementInspectorActive = !elementInspectorActive;
   inspectorBtn.classList.toggle('active', elementInspectorActive);
-  if (!elementInspectorActive) sendCommand({ command: 'unhighlight_element' });
+  // Tell injected.js to start/stop listening for page mouseover events
+  sendCommand({ command: 'set_reverse_inspector', active: elementInspectorActive });
+  if (!elementInspectorActive) {
+    sendCommand({ command: 'unhighlight_element' });
+    clearPanelHighlights();
+  }
 });
 
 // ── Data rendering ────────────────────────────────────────────────────────────
@@ -210,30 +248,51 @@ function renderOverview(data) {
 }
 
 const PLUGIN_TOOLTIPS = {
-  ScrollTrigger: 'Links GSAP animations to the scroll position. The most widely used GSAP plugin.',
-  Draggable: 'Makes any element draggable, spinnable, or throwable with momentum.',
-  Flip: 'Animates elements between two layout states (FLIP = First, Last, Invert, Play).',
-  SplitText: 'Splits text into individual chars/words/lines so each can be animated independently. Club GSAP.',
-  MorphSVGPlugin: 'Morphs one SVG path into another. Club GSAP.',
-  DrawSVGPlugin: 'Animates SVG strokes as if they are being drawn. Club GSAP.',
+  ScrollTrigger:    'Links GSAP animations to the scroll position. The most widely used GSAP plugin.',
+  Draggable:        'Makes any element draggable, spinnable, or throwable with momentum.',
+  Flip:             'Animates elements between two layout states (FLIP = First, Last, Invert, Play).',
+  SplitText:        'Splits text into individual characters, words, or lines so each can be animated independently. Free since Webflow acquired GSAP.',
+  MorphSVGPlugin:   'Morphs one SVG path shape into another. Free since Webflow acquired GSAP.',
+  DrawSVGPlugin:    'Animates SVG strokes as if they are being drawn on screen. Free since Webflow acquired GSAP.',
   MotionPathPlugin: 'Animates elements along an SVG path.',
-  Observer: 'Unified listener for scroll, touch, pointer, and wheel events.',
-  ScrollToPlugin: 'Animates the scroll position of a container or window.',
-  TextPlugin: 'Animates text character by character.',
-  GSDevTools: 'Interactive animation debugger (a separate UI tool). Club GSAP.',
-  EaselPlugin: 'Integrates with EaselJS / CreateJS for canvas-based animations.',
-  PixiPlugin: 'Integrates with PixiJS for WebGL-accelerated animations.',
+  Observer:         'Unified listener for scroll, touch, pointer, and wheel events.',
+  ScrollToPlugin:   'Animates the scroll position of a container or the window.',
+  TextPlugin:       'Animates text content character by character.',
+  GSDevTools:       'Interactive animation debugger with a visual playback UI. Free since Webflow acquired GSAP.',
+  EaselPlugin:      'Integrates with EaselJS / CreateJS for canvas-based animations.',
+  PixiPlugin:       'Integrates with PixiJS for WebGL-accelerated animations.',
 };
 
 // ── Animations tab — diff-based rendering to prevent flicker ─────────────────
+function applyAnimFilter(anims) {
+  switch (animFilter) {
+    case 'load-in':
+      // One-shot: not scroll-linked, repeat !== -1, not paused at start
+      return anims.filter((a) => !a.isScrollLinked && a.repeat !== -1 && a.type === 'tween');
+    case 'scroll':
+      return anims.filter((a) => a.isScrollLinked);
+    case 'looping':
+      return anims.filter((a) => a.repeat === -1);
+    case 'paused':
+      return anims.filter((a) => a.paused);
+    case 'timelines':
+      return anims.filter((a) => a.type === 'timeline');
+    default:
+      return anims;
+  }
+}
+
 function renderAnimations(data) {
   const list = document.getElementById('anim-list');
   const topLevel = data.animations.filter((a) => a.depth <= 1);
+  const filtered = applyAnimFilter(topLevel);
 
-  if (!topLevel.length) {
-    if (!list.querySelector('.empty-state')) {
-      list.innerHTML =
-        '<div class="empty-state">No animations detected. GSAP animations will appear here once they are created.</div>';
+  if (!filtered.length) {
+    const msg = topLevel.length
+      ? `No animations match the "${animFilter}" filter.`
+      : 'No animations detected. GSAP animations will appear here once they are created.';
+    if (list.querySelector('.empty-state')?.textContent !== msg) {
+      list.innerHTML = `<div class="empty-state">${msg}</div>`;
       animItemMap.clear();
       lastAnimIds = '';
     }
@@ -241,24 +300,19 @@ function renderAnimations(data) {
     return;
   }
 
-  const newIds = topLevel.map((a) => a.id).join(',');
+  const newIds = filtered.map((a) => a.id).join(',');
 
   if (newIds !== lastAnimIds) {
-    // Structure changed — full rebuild (new/removed animations)
     lastAnimIds = newIds;
     list.innerHTML = '';
     animItemMap.clear();
-
-    topLevel.forEach((anim) => {
+    filtered.forEach((anim) => {
       const item = buildAnimItem(anim);
       animItemMap.set(anim.id, item);
       list.appendChild(item);
     });
   } else {
-    // Only patch the fields that change on each poll: state dot + scrub position
-    topLevel.forEach((anim) => {
-      patchAnimItem(anim, animItemMap.get(anim.id));
-    });
+    filtered.forEach((anim) => patchAnimItem(anim, animItemMap.get(anim.id)));
   }
 
   if (currentView === 'timeline') renderTimelineView(data);
@@ -274,19 +328,33 @@ function buildAnimItem(anim) {
   const scrollTag = anim.isScrollLinked
     ? `<span class="badge badge-scroll" data-tooltip="This animation's progress is controlled by scroll position, not clock time.">scroll</span>`
     : '';
-  const typeIcon = anim.type === 'timeline' ? '⏱' : '▶';
-  const propSummary =
-    Object.keys(anim.vars)
-      .filter((k) => !['ease', 'duration', 'delay', 'repeat', 'yoyo', 'stagger'].includes(k))
-      .join(', ') || 'no props';
+  const typeTag = `<span class="anim-type-tag ${anim.type}"
+    data-tooltip="${anim.type === 'timeline'
+      ? 'A timeline is a container that groups multiple tweens together. You can control all of them at once — play, pause, reverse, or scrub the whole sequence with a single handle.'
+      : 'A tween is a single animation instruction — it moves one or more elements from one state to another over a set duration.'
+    }">${anim.type}</span>`;
+
+  const animatedProps = Object.keys(anim.vars)
+    .filter((k) => !['ease', 'duration', 'delay', 'repeat', 'yoyo', 'stagger'].includes(k));
+  const propSummary = animatedProps.join(', ');
+  const propDisplay = propSummary || 'no props';
+  const propTooltip = propSummary
+    ? `Animated CSS/transform properties: ${propSummary}. These are the values GSAP is changing on this element.`
+    : (anim.type === 'timeline'
+        ? 'This is a timeline container — it groups tweens but does not animate properties directly.'
+        : 'No standard animated properties detected. This tween may be animating plugin-specific values (e.g. DrawSVG, MotionPath) or CSS custom properties not in the standard list.');
+
+  const targetTooltip = anim.targetSelector
+    ? `The CSS selector of the element(s) being animated.`
+    : `Anonymous target — either the element has no id or class to identify it by, or this animation targets a plain JavaScript object rather than a DOM element.`;
 
   item.innerHTML = `
     <div class="anim-row-top">
       <span class="dot ${stateClass}" data-tooltip="Animation state: ${stateLabel}"></span>
-      <span class="anim-type">${typeIcon}</span>
-      <span class="anim-target">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
+      ${typeTag}
+      <span class="anim-target" data-tooltip="${escapeAttr(targetTooltip)}">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
       ${scrollTag}
-      <span class="anim-props text-secondary">${escapeHtml(propSummary)}</span>
+      <span class="anim-props text-secondary" data-tooltip="${escapeAttr(propTooltip)}">${escapeHtml(propDisplay)}</span>
       <span class="anim-duration text-secondary"
         data-tooltip="Total duration of this animation in seconds. Does not apply to scroll-linked animations."
         >${anim.duration.toFixed(2)}s</span>
@@ -370,7 +438,42 @@ function renderTimelineView(data) {
   timelineView.render(data.animations, data.scrollTriggers);
 }
 
+// ── Panel row highlight (reverse element inspector) ───────────────────────────
+function highlightPanelRows(animIds, stIds) {
+  clearPanelHighlights();
+  animIds.forEach((id) => {
+    const item = animItemMap.get(id);
+    if (item) {
+      item.classList.add('inspector-highlight');
+      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
+  stIds.forEach((id) => {
+    const item = document.querySelector(`.st-item [data-id="${id}"]`)?.closest('.st-item');
+    if (item) {
+      item.classList.add('inspector-highlight');
+      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
+}
+
+function clearPanelHighlights() {
+  document.querySelectorAll('.inspector-highlight').forEach((el) =>
+    el.classList.remove('inspector-highlight')
+  );
+}
+
 // ── ScrollTrigger tab — stable ordering ───────────────────────────────────────
+function applyStFilter(sts) {
+  switch (stFilter) {
+    case 'scrub':    return sts.filter((st) => st.scrub !== false);
+    case 'one-shot': return sts.filter((st) => st.scrub === false);
+    case 'pinned':   return sts.filter((st) => st.pin);
+    case 'active':   return sts.filter((st) => st.isActive);
+    default:         return sts;
+  }
+}
+
 function renderScrollTriggers(data) {
   const list = document.getElementById('st-list');
 
@@ -387,12 +490,18 @@ function renderScrollTriggers(data) {
   stOrderIds = stOrderIds.filter((id) => incomingIds.includes(id));
   incomingIds.forEach((id) => { if (!stOrderIds.includes(id)) stOrderIds.push(id); });
 
-  const ordered = stOrderIds
+  const orderedAll = stOrderIds
     .map((id) => data.scrollTriggers.find((st) => st.id === id))
     .filter(Boolean);
 
-  list.innerHTML = '';
+  const ordered = applyStFilter(orderedAll);
 
+  if (!ordered.length) {
+    list.innerHTML = `<div class="empty-state">No ScrollTrigger instances match the "${stFilter}" filter.</div>`;
+    return;
+  }
+
+  list.innerHTML = '';
   ordered.forEach((st) => {
     const item = document.createElement('div');
     item.className = 'st-item';
@@ -711,6 +820,7 @@ const PROP_TOOLTIPS = {
   duration: 'How long the animation takes in seconds. Default is 0.5s in GSAP 3.',
   ease: 'Easing function. Examples: "power2.out" (decelerates), "elastic.out(1,0.3)" (bounces), "none" (linear).',
   delay: 'Seconds to wait before starting. For sequencing inside timelines, prefer the position parameter instead.',
+  overwrite: 'Controls what happens when a new tween targets the same property on the same element as an existing tween. true = kill all existing tweens on that target immediately. "auto" = only kill tweens that conflict on the specific property being animated (safer, recommended).',
 };
 
 document.getElementById('modal-close').addEventListener('click', () => {

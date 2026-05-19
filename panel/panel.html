@@ -133,6 +133,22 @@
         <button class="btn view-btn" id="btn-timeline-view">Timeline</button>
       </div>
 
+      <!-- Animation filters -->
+      <div class="filter-bar" id="anim-filter-bar">
+        <span class="filter-label" data-tooltip="Filter the animation list to focus on what you need.">Filter:</span>
+        <button class="filter-chip active" data-filter="all">All</button>
+        <button class="filter-chip" data-filter="load-in"
+          data-tooltip="Animations that play once on page load and don't repeat. Typically used for hero sections and entrance effects.">Load-in</button>
+        <button class="filter-chip" data-filter="scroll"
+          data-tooltip="Animations whose progress is tied to the scroll position via ScrollTrigger's scrub option.">Scroll-linked</button>
+        <button class="filter-chip" data-filter="looping"
+          data-tooltip="Animations set to repeat indefinitely (repeat: -1). These loop continuously without stopping.">Looping</button>
+        <button class="filter-chip" data-filter="paused"
+          data-tooltip="Animations currently in a paused state. These may be waiting to be triggered or were manually paused.">Paused</button>
+        <button class="filter-chip" data-filter="timelines"
+          data-tooltip="Show only timeline containers — these group multiple tweens together so they can be controlled as one unit.">Timelines</button>
+      </div>
+
       <!-- List view -->
       <div id="anim-list-view">
         <div id="anim-list" class="anim-list"></div>
@@ -162,6 +178,20 @@
           data-tooltip="Calls ScrollTrigger.refresh() — recalculates all trigger positions. Use this after the page layout changes (images load, accordions open, etc.).">
           Refresh All
         </button>
+      </div>
+
+      <!-- ScrollTrigger filters -->
+      <div class="filter-bar" id="st-filter-bar">
+        <span class="filter-label" data-tooltip="Filter the ScrollTrigger list.">Filter:</span>
+        <button class="filter-chip active" data-filter="all">All</button>
+        <button class="filter-chip" data-filter="scrub"
+          data-tooltip="Triggers where animation progress is directly tied to scroll position. The animation plays forwards and backwards as you scroll.">Scrub</button>
+        <button class="filter-chip" data-filter="one-shot"
+          data-tooltip="Triggers that fire an animation once when scrolled into view, like a play button activated by scroll position.">One-shot</button>
+        <button class="filter-chip" data-filter="pinned"
+          data-tooltip="Triggers that pin (stick) an element to the viewport while the user scrolls past it, creating a sticky scroll effect.">Pinned</button>
+        <button class="filter-chip" data-filter="active"
+          data-tooltip="Triggers where the current scroll position is inside the trigger's start/end range right now.">Active now</button>
       </div>
 
       <div id="st-list" class="st-list">
