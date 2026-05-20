@@ -1,7 +1,6 @@
 // panel.js — GSAP Inspector DevTools panel — two-pane edition.
 // ES module loaded from panel.html.
 
-import { TimelineView } from './timeline-view.js';
 import { runLinter }    from '../rules/gsap-linter.js';
 
 // ── Connection ────────────────────────────────────────────────────────────────
@@ -10,7 +9,6 @@ port.postMessage({ type: 'devtools_connect', tabId: chrome.devtools.inspectedWin
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let lastData             = null;
-let timelineView         = null;
 let stOrderIds           = [];
 const animItemMap        = new Map();
 const stItemMap          = new Map();
@@ -104,7 +102,6 @@ function switchToTab(name) {
   });
   document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
   document.getElementById(`tab-${name}`)?.classList.add('active');
-  if (name === 'timeline'  && lastData) renderTimelineView(lastData);
   if (name === 'linter'    && lastData) renderLinter(lastData);
   if (name === 'overrides')             renderOverrides();
 }
@@ -739,7 +736,7 @@ function renderAnimDetail(id) {
   }
 }
 
-function buildMiniTimeline(container, anim, children) {
+function buildMiniTimeline(container, anim, children, idPrefix = '') {
   const PADDING = { top: 6, bottom: 22, left: 8, right: 8 };
   const ROW_H = 16;
   const ROW_GAP = 4;
@@ -764,7 +761,7 @@ function buildMiniTimeline(container, anim, children) {
 
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('id', 'mini-tl-svg');
+  svg.setAttribute('id', `${idPrefix}mini-tl-svg`);
   svg.setAttribute('data-tl-width', String(W));
   const svgW = W + PADDING.left + PADDING.right;
   svg.setAttribute('width', '100%');
@@ -850,7 +847,7 @@ function buildMiniTimeline(container, anim, children) {
   // Playhead
   const ph = document.createElementNS(ns, 'line');
   const phX = String((anim.progress || 0) * W);
-  ph.setAttribute('id', 'mini-tl-playhead');
+  ph.setAttribute('id', `${idPrefix}mini-tl-playhead`);
   ph.setAttribute('x1', phX); ph.setAttribute('y1', '0');
   ph.setAttribute('x2', phX); ph.setAttribute('y2', String(axisY + TICK_H));
   ph.setAttribute('stroke', 'var(--accent, #60a5fa)');
@@ -1062,6 +1059,32 @@ function renderStDetail(id) {
         ▶ ${escapeHtml(linkedAnim.targetSelector || 'anonymous')}
       </button>
     </div>`;
+
+    const stChildren = lastData.animations.filter((a) => a.parentId === linkedAnim.id);
+    if (stChildren.length) {
+      html += `
+      <div class="detail-section">
+        <div class="detail-section-header">Playback Timeline
+          <span data-tooltip="Visual representation of when each child tween starts and ends within the linked timeline." style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--border);color:var(--text-secondary);font-size:9px;cursor:help;font-weight:700">?</span>
+        </div>
+        <div class="detail-mini-tl-wrap" id="st-mini-tl-placeholder"></div>
+      </div>`;
+    }
+
+    const stCode = generateAnimCode(linkedAnim, lastData.animations);
+    if (stCode) {
+      html += `
+      <div class="detail-section">
+        <div class="detail-section-header">${icon('code', 12)} Generated Code</div>
+        <div class="detail-code-block">
+          <div class="detail-code-toolbar">
+            <span class="detail-code-lang">JavaScript</span>
+            <button class="btn btn-sm" id="st-copy-code" data-tooltip="Copy this code to clipboard.">${icon('copy', 14)} Copy</button>
+          </div>
+          <pre class="detail-code-pre">${escapeHtml(stCode)}</pre>
+        </div>
+      </div>`;
+    }
   }
 
   if (st.invalidateOnRefresh === false && st.scrub !== false) {
@@ -1087,6 +1110,29 @@ function renderStDetail(id) {
     switchToTab('animations');
     setTimeout(() => selectAnim(animId), 60);
   });
+
+  const stMiniTlEl = container.querySelector('#st-mini-tl-placeholder');
+  if (stMiniTlEl && linkedAnim) {
+    const stChildren = lastData.animations.filter((a) => a.parentId === linkedAnim.id);
+    if (stChildren.length) buildMiniTimeline(stMiniTlEl, linkedAnim, stChildren, 'st-');
+  }
+
+  const stCode = linkedAnim ? generateAnimCode(linkedAnim, lastData.animations) : '';
+  if (stCode) {
+    container.querySelector('#st-copy-code')?.addEventListener('click', (e) => {
+      navigator.clipboard.writeText(stCode);
+      const btn = e.currentTarget;
+      const orig = btn.innerHTML;
+      btn.innerHTML = `${icon('check', 14)} Copied`;
+      btn.style.color = 'var(--success)';
+      btn.style.borderColor = 'var(--success)';
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 1600);
+    });
+  }
 }
 
 function patchStDetail() {
@@ -1102,6 +1148,23 @@ function patchStDetail() {
   if (stateEl) stateEl.textContent = st.isActive ? 'Active' : 'Inactive';
   const prog = container.querySelector('#detail-st-progress');
   if (prog) prog.textContent = Math.round(st.progress * 100) + '%';
+
+  // Move ST mini-timeline playhead using linked animation's progress
+  const linkedAnim = st.linkedAnimId
+    ? lastData.animations.find((a) => a.id === st.linkedAnimId)
+    : null;
+  if (linkedAnim) {
+    const svg = container.querySelector('#st-mini-tl-svg');
+    if (svg) {
+      const W = parseFloat(svg.getAttribute('data-tl-width') || '300');
+      const playhead = svg.querySelector('#st-mini-tl-playhead');
+      if (playhead) {
+        const x = String(linkedAnim.progress * W);
+        playhead.setAttribute('x1', x);
+        playhead.setAttribute('x2', x);
+      }
+    }
+  }
 }
 
 // ── Panel row highlight (reverse element inspector) ───────────────────────────
@@ -1127,13 +1190,6 @@ function clearPanelHighlights() {
   document.querySelectorAll('.inspector-highlight').forEach((el) =>
     el.classList.remove('inspector-highlight')
   );
-}
-
-// ── Timeline Gantt view ───────────────────────────────────────────────────────
-function renderTimelineView(data) {
-  const container = document.getElementById('timeline-container');
-  if (!timelineView) timelineView = new TimelineView(container);
-  timelineView.render(data.animations, data.scrollTriggers);
 }
 
 // ── Linter tab ────────────────────────────────────────────────────────────────
