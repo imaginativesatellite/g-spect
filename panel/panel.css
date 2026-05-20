@@ -1613,12 +1613,11 @@ body { font-size: 13px; }
 
 /* ── Left pane ──────────────────────────────────────────────────────────── */
 .pane-left {
-  width: 260px;
+  width: 350px;
   min-width: 160px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
   overflow: hidden;
   background: var(--bg);
 }
@@ -1799,6 +1798,10 @@ body { font-size: 13px; }
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 8px;
+}
+
+#st-detail .detail-stats {
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
 }
 
 .stat {
@@ -2041,32 +2044,16 @@ body { font-size: 13px; }
 
 /* ── Resize handle ──────────────────────────────────────────────────────── */
 .resize-handle {
-  width: 5px;
+  width: 1px;
   flex-shrink: 0;
   cursor: col-resize;
-  position: relative;
+  background: var(--border);
+  transition: width 0.12s, background 0.12s;
   z-index: 1;
 }
 
-.resize-handle::after {
-  content: '';
-  position: absolute;
-  top: 0; bottom: 0;
-  left: 2px;
-  width: 1px;
-  background: var(--border);
-  transition: width 0.15s, left 0.15s, background 0.15s;
-}
-
-.resize-handle:hover::after {
-  left: 1px;
+.resize-handle.dragging {
   width: 3px;
-  background: var(--border);
-}
-
-.resize-handle.dragging::after {
-  left: 0;
-  width: 5px;
   background: var(--accent);
 }
 
