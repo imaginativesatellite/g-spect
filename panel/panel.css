@@ -139,18 +139,34 @@ body {
   flex: 1;
 }
 
-/* ── Tabs ─────────────────────────────────────────────────────────────────── */
-.tabs {
+/* ── Tab row (tabs + global playback right-aligned) ──────────────────────── */
+.tabs-row {
   display: flex;
   align-items: stretch;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
   overflow-x: auto;
   overflow-y: hidden;
+  min-width: 0;
 }
 
 .tabs::-webkit-scrollbar { height: 3px; }
+
+.tab-global-strip {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+}
 
 .tab {
   padding: 0 14px;
@@ -657,15 +673,19 @@ a.btn, a.btn:hover, a.btn:visited { text-decoration: none; }
 }
 
 .filter-chip {
-  padding: 2px 9px;
-  border-radius: 99px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-family: inherit;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
@@ -1605,9 +1625,11 @@ body { font-size: 13px; }
 .pane-left-header {
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+  padding: 0 4px;
 }
 
 /* ── Global playback mini strip ─────────────────────────────────────────── */
@@ -1646,10 +1668,15 @@ body { font-size: 13px; }
   flex-shrink: 0;
 }
 
-/* Filter bar inside pane (tighter padding) */
+/* Filter bar inside pane — single row with chips + spacer + icon buttons */
 .pane-left-header .filter-bar {
-  padding: 4px 8px 6px;
+  flex: 1;
+  padding: 4px 4px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
+
+.filter-bar-spacer { flex: 1; min-width: 4px; }
 
 /* ── Scrollable list wrapper ────────────────────────────────────────────── */
 .pane-list-wrap {
@@ -1802,7 +1829,7 @@ body { font-size: 13px; }
   gap: 4px;
 }
 
-.stat-value.stat-sm { font-size: 13px; font-family: inherit; font-weight: 700; }
+.stat-value.stat-sm { font-size: 13px; font-weight: 700; }
 
 /* ── Detail playback ────────────────────────────────────────────────────── */
 .detail-playback {
@@ -2002,18 +2029,7 @@ body { font-size: 13px; }
   flex-direction: column;
 }
 
-/* ── Full-width global playback strip ───────────────────────────────────── */
-.global-strip-full {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-/* ── Inner two-pane wrapper (below the global strip) ────────────────────── */
+/* ── Inner two-pane wrapper ─────────────────────────────────────────────── */
 .two-pane-inner {
   display: flex;
   flex-direction: row;
@@ -2024,17 +2040,32 @@ body { font-size: 13px; }
 
 /* ── Resize handle ──────────────────────────────────────────────────────── */
 .resize-handle {
-  width: 4px;
+  width: 5px;
   flex-shrink: 0;
   cursor: col-resize;
-  background: var(--border);
-  transition: background 0.15s;
   position: relative;
   z-index: 1;
 }
 
-.resize-handle:hover,
-.resize-handle.dragging {
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--border);
+  transition: width 0.15s, left 0.15s, background 0.15s;
+}
+
+.resize-handle:hover::after {
+  left: 1px;
+  width: 3px;
+  background: var(--border);
+}
+
+.resize-handle.dragging::after {
+  left: 0;
+  width: 5px;
   background: var(--accent);
 }
 
@@ -2098,9 +2129,10 @@ body { font-size: 13px; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  padding: 7px 14px;
+  padding: 7px 0;
+  margin: 0 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: transparent;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.5;

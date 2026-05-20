@@ -413,7 +413,7 @@ function buildListGroup(anim, allAnimations) {
       childRow.innerHTML = `
         <span style="width:16px;flex-shrink:0"></span>
         <span class="dot ${childCls}" data-tooltip="State: ${childLabel}"></span>
-        <span class="anim-type-tag tween" style="font-size:8px">tween</span>
+        <span class="anim-type-tag tween" style="font-size:8px">T</span>
         <span class="list-item-target">${escapeHtml(child.targetSelector || 'anonymous')}</span>
         <span class="list-item-meta">${child.duration.toFixed(1)}s</span>
       `;
@@ -519,7 +519,6 @@ function renderAnimDetail(id) {
     <div class="detail-breadcrumb">
       <button class="detail-breadcrumb-link" id="detail-breadcrumb-parent" data-parentid="${escapeAttr(parentAnim.id)}"
         data-tooltip="Go back to the parent timeline that contains this tween.">
-        <span class="anim-type-tag timeline" style="font-size:8px">TL</span>
         ${escapeHtml(parentAnim.targetSelector || 'anonymous')}
       </button>
       <span class="detail-breadcrumb-sep">›</span>

@@ -27,15 +27,32 @@
       </button>
     </div>
 
-    <!-- ── Tab bar ────────────────────────────────────────────────────────── -->
-    <div class="tabs" role="tablist">
-      <button class="tab active" data-tab="overview"      role="tab" aria-selected="true">Overview</button>
-      <button class="tab"        data-tab="animations"    role="tab">Animations</button>
-      <button class="tab"        data-tab="timeline"      role="tab">Timeline</button>
-      <button class="tab"        data-tab="scrolltrigger" role="tab">ScrollTrigger</button>
-      <button class="tab"        data-tab="linter"        role="tab">Linter</button>
-      <button class="tab"        data-tab="code"          role="tab">Code</button>
-      <button class="tab"        data-tab="overrides"     role="tab">Overrides</button>
+    <!-- ── Tab bar + global playback (same row) ─────────────────────────── -->
+    <div class="tabs-row">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="overview"      role="tab" aria-selected="true">Overview</button>
+        <button class="tab"        data-tab="animations"    role="tab">Animations</button>
+        <button class="tab"        data-tab="timeline"      role="tab">Timeline</button>
+        <button class="tab"        data-tab="scrolltrigger" role="tab">ScrollTrigger</button>
+        <button class="tab"        data-tab="linter"        role="tab">Linter</button>
+        <button class="tab"        data-tab="code"          role="tab">Code</button>
+        <button class="tab"        data-tab="overrides"     role="tab">Overrides</button>
+      </div>
+      <div class="tab-global-strip">
+        <span class="global-strip-label" data-tooltip="Controls GSAP's master timeline — pausing it freezes every animation simultaneously.">Global</span>
+        <button id="btn-restart-all" class="btn btn-icon" data-tooltip="Restart all">
+          <i class="ph-light ph-skip-back"></i>
+        </button>
+        <button id="btn-play-all" class="btn btn-icon" data-tooltip="Play all">
+          <i class="ph-light ph-play"></i>
+        </button>
+        <button id="btn-pause-all" class="btn btn-icon" data-tooltip="Pause all">
+          <i class="ph-light ph-pause"></i>
+        </button>
+        <button id="btn-reverse-all" class="btn btn-icon" data-tooltip="Reverse all">
+          <i class="ph-light ph-arrow-counter-clockwise"></i>
+        </button>
+      </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -82,43 +99,12 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <div id="tab-animations" class="tab-content anim-tab-outer">
 
-      <!-- Full-width global playback strip -->
-      <div class="global-strip-full">
-        <span class="global-strip-label" data-tooltip="Controls GSAP's master timeline — pausing it freezes every animation simultaneously.">Global</span>
-        <button id="btn-restart-all" class="btn btn-icon" data-tooltip="Restart all">
-          <i class="ph-light ph-skip-back"></i>
-        </button>
-        <button id="btn-play-all" class="btn btn-icon" data-tooltip="Play all">
-          <i class="ph-light ph-play"></i>
-        </button>
-        <button id="btn-pause-all" class="btn btn-icon" data-tooltip="Pause all">
-          <i class="ph-light ph-pause"></i>
-        </button>
-        <button id="btn-reverse-all" class="btn btn-icon" data-tooltip="Reverse all">
-          <i class="ph-light ph-arrow-counter-clockwise"></i>
-        </button>
-      </div>
-
       <!-- Inner two-pane wrapper -->
       <div class="two-pane-inner">
 
         <!-- Left pane -->
         <div class="pane-left">
           <div class="pane-left-header">
-
-            <!-- Toolbar: collapse/expand -->
-            <div class="pane-toolbar">
-              <button class="btn btn-icon" id="btn-collapse-all"
-                data-tooltip="Collapse all timeline groups">
-                <i class="ph-light ph-arrows-in-line-vertical"></i>
-              </button>
-              <button class="btn btn-icon" id="btn-expand-all"
-                data-tooltip="Expand all timeline groups">
-                <i class="ph-light ph-arrows-out-line-vertical"></i>
-              </button>
-            </div>
-
-            <!-- Filter chips -->
             <div class="filter-bar" id="anim-filter-bar">
               <button class="filter-chip active" data-filter="all">All</button>
               <button class="filter-chip" data-filter="load-in"
@@ -127,6 +113,15 @@
                 data-tooltip="Progress tied to scroll position via ScrollTrigger scrub.">Scroll</button>
               <button class="filter-chip" data-filter="timelines"
                 data-tooltip="Show only timeline containers.">Timelines</button>
+              <span class="filter-bar-spacer"></span>
+              <button class="btn btn-icon" id="btn-collapse-all"
+                data-tooltip="Collapse all timeline groups">
+                <i class="ph-light ph-arrows-in-line-vertical"></i>
+              </button>
+              <button class="btn btn-icon" id="btn-expand-all"
+                data-tooltip="Expand all timeline groups">
+                <i class="ph-light ph-arrows-out-line-vertical"></i>
+              </button>
             </div>
           </div>
 
