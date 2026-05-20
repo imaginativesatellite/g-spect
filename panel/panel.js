@@ -25,22 +25,22 @@ let selectedStId         = null;
 
 // ── Icon helpers ──────────────────────────────────────────────────────────────
 const ICONS = {
-  play:         `<polygon points="5 3 19 12 5 21 5 3"/>`,
-  pause:        `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`,
-  skipBack:     `<polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20"/>`,
-  rotateCcw:    `<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.08"/>`,
-  x:            `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
-  chevronRight: `<polyline points="9 18 15 12 9 6"/>`,
-  refreshCw:    `<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`,
-  copy:         `<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`,
-  code:         `<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>`,
-  link:         `<path d="M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3"/><line x1="8" y1="12" x2="16" y2="12"/>`,
+  play:         'ph-play',
+  pause:        'ph-pause',
+  skipBack:     'ph-skip-back',
+  rotateCcw:    'ph-arrow-counter-clockwise',
+  refreshCw:    'ph-arrows-clockwise',
+  x:            'ph-x',
+  chevronRight: 'ph-caret-right',
+  copy:         'ph-copy',
+  code:         'ph-code',
+  link:         'ph-link',
 };
 
-function icon(name, size = 16) {
-  const paths = ICONS[name];
-  if (!paths) return '';
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+function icon(name, size = 20) {
+  const ph = ICONS[name];
+  if (!ph) return '';
+  return `<i class="ph-light ${ph}" style="font-size:${size}px;line-height:1;display:inline-flex;align-items:center"></i>`;
 }
 
 // ── Message handling ──────────────────────────────────────────────────────────
@@ -629,7 +629,7 @@ function renderAnimDetail(id) {
       <div class="detail-code-block">
         <div class="detail-code-toolbar">
           <span class="detail-code-lang">JavaScript</span>
-          <button class="btn btn-sm" id="detail-copy-code" data-tooltip="Copy this code to clipboard.">${icon('copy', 12)} Copy</button>
+          <button class="btn btn-sm" id="detail-copy-code" data-tooltip="Copy this code to clipboard.">${icon('copy', 14)} Copy</button>
         </div>
         <pre class="detail-code-pre">${escapeHtml(code)}</pre>
       </div>

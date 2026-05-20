@@ -95,7 +95,7 @@ html, body {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Wix Madefor Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 12px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -280,23 +280,26 @@ body {
   border-color: #0ea5e944;
 }
 
-/* ── Buttons ──────────────────────────────────────────────────────────────── */
+/* ── Buttons (Chakra UI inspired) ─────────────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 3px 10px;
-  border-radius: var(--radius-sm);
+  gap: 6px;
+  padding: 0 12px;
+  height: 30px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text);
-  font-size: 11px;
+  font-family: inherit;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
-  line-height: 1.4;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  line-height: 1;
 }
 
 .btn:hover {
@@ -304,55 +307,75 @@ body {
   border-color: var(--text-muted);
 }
 
-.btn:active {
-  background: var(--bg-tertiary);
+.btn:active { background: var(--bg-tertiary); }
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
+/* Solid / primary */
 .btn-primary {
   background: var(--accent);
   color: #fff;
-  border-color: var(--accent);
+  border-color: transparent;
 }
-
 .btn-primary:hover {
   background: var(--accent-hover);
-  border-color: var(--accent-hover);
+  border-color: transparent;
 }
 
+/* Danger */
 .btn-danger {
   background: var(--error-bg);
   color: var(--error);
-  border-color: #dc262633;
+  border-color: transparent;
 }
-
 .btn-danger:hover {
   background: var(--error);
   color: #fff;
-  border-color: var(--error);
 }
 
+/* Reset — danger ghost */
 .btn-reset {
   background: var(--error-bg);
   color: var(--error);
-  border-color: #dc262633;
+  border-color: transparent;
   font-size: 11px;
 }
-
 .btn-reset:hover {
   background: var(--error);
   color: #fff;
-  border-color: var(--error);
 }
 
-.btn-icon {
-  padding: 2px 6px;
-  font-size: 12px;
-  min-width: 24px;
-}
-
+/* Small text button */
 .btn-sm {
-  padding: 1px 7px;
-  font-size: 10px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 5px;
+}
+
+/* Ghost icon button — square, no border */
+.btn-icon {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  box-shadow: none;
+  line-height: 0;
+}
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: transparent;
+}
+.btn-icon:active {
+  background: var(--bg-tertiary);
+  border-color: transparent;
 }
 
 /* ── Speed buttons ────────────────────────────────────────────────────────── */
@@ -1993,25 +2016,6 @@ body { font-size: 13px; }
 .list-item-chevron:hover { color: var(--text); background: var(--bg-hover); }
 .list-item-chevron.open  { transform: rotate(90deg); color: var(--accent); }
 
-/* Icon-only buttons: borderless, transparent background */
-.btn-icon {
-  line-height: 0;
-  padding: 4px 6px;
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.btn-icon:hover {
-  border-color: transparent;
-  background: var(--bg-hover);
-}
-
-.btn-icon:active {
-  background: var(--bg-tertiary);
-  border-color: transparent;
-}
-
 /* ── Mini-timeline SVG styles (detail pane) ─────────────────────────────── */
 .detail-mini-tl-wrap {
   overflow-x: hidden;
@@ -2021,15 +2025,17 @@ body { font-size: 13px; }
   padding: 8px;
 }
 
-/* ── Breadcrumb in detail pane ───────────────────────────────────────────── */
+/* ── Breadcrumb in detail pane (Chakra UI style) ─────────────────────────── */
 .detail-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
+  flex-wrap: wrap;
+  padding: 7px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-tertiary);
-  font-size: 11px;
+  background: var(--bg-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 .detail-breadcrumb-link {
   display: inline-flex;
@@ -2037,23 +2043,31 @@ body { font-size: 13px; }
   gap: 4px;
   background: none;
   border: none;
-  padding: 1px 4px;
-  border-radius: var(--radius-sm);
+  padding: 0;
   color: var(--accent);
   cursor: pointer;
-  font-size: 11px;
   font-family: inherit;
-  transition: background 0.12s;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: opacity 0.15s;
 }
-.detail-breadcrumb-link:hover { background: var(--bg-hover); }
+.detail-breadcrumb-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .detail-breadcrumb-sep {
+  margin: 0 6px;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 .detail-breadcrumb-current {
-  color: var(--text-secondary);
-  font-size: 11px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* ── Code snippet block in detail pane ──────────────────────────────────── */
@@ -2102,3 +2116,13 @@ body { font-size: 13px; }
 
 /* ── SVG icon alignment inside btn-sm ───────────────────────────────────── */
 .btn-sm svg, .btn-icon svg { vertical-align: middle; }
+
+/* ── Phosphor icon sizing ─────────────────────────────────────────────────── */
+i[class*="ph-"] {
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.btn-sm i[class*="ph-"] { font-size: 14px; }
