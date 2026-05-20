@@ -346,6 +346,7 @@ body {
 .btn-reset:hover {
   background: var(--error);
   color: #fff;
+  border-color: transparent;
 }
 
 /* Small text button */
@@ -553,7 +554,7 @@ body {
 /* ── Overview grid ────────────────────────────────────────────────────────── */
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -584,12 +585,41 @@ body {
   line-height: 1.2;
 }
 
-/* ── Plugin list ──────────────────────────────────────────────────────────── */
+/* ── Plugin cards ─────────────────────────────────────────────────────────── */
 .plugin-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.plugin-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plugin-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.plugin-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.plugin-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
 }
 
 /* ── Filter bar ───────────────────────────────────────────────────────────── */
@@ -1758,7 +1788,7 @@ body { font-size: 13px; }
   gap: 4px;
 }
 
-.stat-value.stat-sm { font-size: 13px; font-family: inherit; font-weight: 500; }
+.stat-value.stat-sm { font-size: 13px; font-family: inherit; font-weight: 700; }
 
 /* ── Detail playback ────────────────────────────────────────────────────── */
 .detail-playback {
@@ -1897,29 +1927,52 @@ body { font-size: 13px; }
 
 .detail-child-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 6px;
-  padding: 7px 10px;
+  padding: 8px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
-  transition: border-color 0.1s;
+  transition: border-color 0.1s, background 0.1s;
 }
 
-.detail-child-row:hover { border-color: var(--accent); }
+.detail-child-row:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.detail-child-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detail-child-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 
 .detail-child-target {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
   color: var(--text);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   min-width: 0;
+  word-break: break-all;
+}
+
+.detail-child-props {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+  line-height: 1.4;
 }
 
 /* Override .inspector-highlight for list-item (takes priority over .anim-item) */

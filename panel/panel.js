@@ -226,8 +226,15 @@ function renderOverview(data) {
     pluginList.innerHTML = '<span class="text-secondary">No plugins detected (core GSAP only)</span>';
   } else {
     pluginList.innerHTML = data.plugins.map((p) => {
-      const t = PLUGIN_TOOLTIPS[p] || `${p} plugin`;
-      return `<span class="badge badge-plugin" data-tooltip="${escapeAttr(t)}">${escapeHtml(p)}</span>`;
+      const desc = PLUGIN_TOOLTIPS[p] || `${p} plugin`;
+      const docsUrl = PLUGIN_DOCS[p] || 'https://gsap.com/docs/v3/Plugins/';
+      return `<div class="plugin-card">
+        <div class="plugin-card-title">${escapeHtml(p)}</div>
+        <div class="plugin-card-desc">${escapeHtml(desc)}</div>
+        <div class="plugin-card-footer">
+          <a class="btn btn-sm" href="${escapeAttr(docsUrl)}" target="_blank" rel="noopener">Docs →</a>
+        </div>
+      </div>`;
     }).join('');
   }
   document.getElementById('ix2-warning').style.display = data.hasIx2 ? '' : 'none';
@@ -247,6 +254,22 @@ const PLUGIN_TOOLTIPS = {
   GSDevTools:       'Interactive animation debugger with a visual playback UI. Free since Webflow acquired GSAP.',
   EaselPlugin:      'Integrates with EaselJS / CreateJS for canvas-based animations.',
   PixiPlugin:       'Integrates with PixiJS for WebGL-accelerated animations.',
+};
+
+const PLUGIN_DOCS = {
+  ScrollTrigger:    'https://gsap.com/docs/v3/Plugins/ScrollTrigger/',
+  Draggable:        'https://gsap.com/docs/v3/Plugins/Draggable/',
+  Flip:             'https://gsap.com/docs/v3/Plugins/Flip/',
+  SplitText:        'https://gsap.com/docs/v3/Plugins/SplitText/',
+  MorphSVGPlugin:   'https://gsap.com/docs/v3/Plugins/MorphSVGPlugin/',
+  DrawSVGPlugin:    'https://gsap.com/docs/v3/Plugins/DrawSVGPlugin/',
+  MotionPathPlugin: 'https://gsap.com/docs/v3/Plugins/MotionPathPlugin/',
+  Observer:         'https://gsap.com/docs/v3/Plugins/Observer/',
+  ScrollToPlugin:   'https://gsap.com/docs/v3/Plugins/ScrollToPlugin/',
+  TextPlugin:       'https://gsap.com/docs/v3/Plugins/TextPlugin/',
+  GSDevTools:       'https://gsap.com/docs/v3/Plugins/GSDevTools/',
+  EaselPlugin:      'https://gsap.com/docs/v3/Plugins/EaselPlugin/',
+  PixiPlugin:       'https://gsap.com/docs/v3/Plugins/PixiPlugin/',
 };
 
 // ── Filter helpers ────────────────────────────────────────────────────────────
@@ -342,7 +365,7 @@ function buildListGroup(anim, allAnimations) {
       data-tooltip="${anim.type === 'timeline'
         ? 'Timeline: groups multiple tweens together, controlled as one unit.'
         : 'Tween: single animation instruction moving element(s) from one state to another.'
-      }">${anim.type}</span>
+      }">${anim.type === 'timeline' ? 'TL' : 'T'}</span>
     <span class="list-item-target" data-tooltip="${escapeAttr(
         anim.targetSelector
           ? 'CSS selector of the element(s) being animated.'
@@ -492,7 +515,7 @@ function renderAnimDetail(id) {
     <div class="detail-breadcrumb">
       <button class="detail-breadcrumb-link" id="detail-breadcrumb-parent" data-parentid="${escapeAttr(parentAnim.id)}"
         data-tooltip="Go back to the parent timeline that contains this tween.">
-        <span class="anim-type-tag timeline" style="font-size:8px">timeline</span>
+        <span class="anim-type-tag timeline" style="font-size:8px">TL</span>
         ${escapeHtml(parentAnim.targetSelector || 'anonymous')}
       </button>
       <span class="detail-breadcrumb-sep">›</span>
@@ -502,7 +525,7 @@ function renderAnimDetail(id) {
 
   html += `
     <div class="detail-header">
-      <span class="anim-type-tag ${anim.type}" data-tooltip="${escapeAttr(typeTooltip)}">${anim.type}</span>
+      <span class="anim-type-tag ${anim.type}" data-tooltip="${escapeAttr(typeTooltip)}">${anim.type === 'timeline' ? 'TL' : 'T'}</span>
       <span class="detail-target" data-tooltip="${escapeAttr(
           anim.targetSelector
             ? 'The CSS selector of the element(s) this animation targets.'
@@ -607,14 +630,14 @@ function renderAnimDetail(id) {
             .filter((k) => !['ease','duration','delay','repeat','yoyo','stagger'].includes(k));
           return `
           <div class="detail-child-row" data-childid="${escapeAttr(child.id)}">
-            <span class="anim-type-tag tween" style="font-size:8px">tween</span>
-            <span class="detail-child-target"
-              data-tooltip="${escapeAttr(child.targetSelector ? 'CSS selector of this child tween\'s target element.' : 'Anonymous target.')}"
-              >${escapeHtml(child.targetSelector || 'anonymous')}</span>
-            <span class="list-item-meta">${child.duration.toFixed(1)}s</span>
-            ${childProps.length
-              ? `<span style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px" data-tooltip="Animated properties: ${escapeAttr(childProps.join(', '))}">${escapeHtml(childProps.join(', '))}</span>`
-              : ''}
+            <div class="detail-child-main">
+              <div class="detail-child-top">
+                <span class="anim-type-tag tween" style="font-size:8px">T</span>
+                <span class="detail-child-target">${escapeHtml(child.targetSelector || 'anonymous')}</span>
+                <span class="list-item-meta" style="margin-left:auto;flex-shrink:0">${child.duration.toFixed(2)}s</span>
+              </div>
+              ${childProps.length ? `<div class="detail-child-props">${escapeHtml(childProps.join(', '))}</div>` : ''}
+            </div>
           </div>`;
         }).join('')}
       </div>
@@ -680,10 +703,8 @@ function renderAnimDetail(id) {
   container.querySelectorAll('.detail-child-row').forEach((row) => {
     row.addEventListener('click', () => {
       const childId = row.dataset.childid;
-      if (childId && animItemMap.has(childId)) {
-        // Child not in filtered list; just select and show detail directly
-        selectedAnimId = childId;
-        renderAnimDetail(childId);
+      if (childId) {
+        selectAnim(childId);
       }
     });
   });
@@ -702,7 +723,9 @@ function buildMiniTimeline(container, anim, children) {
   const TICK_H = 6;
   const totalDur = anim.duration || 1;
 
-  const W = Math.max(100, (container.clientWidth || container.offsetWidth || 320) - PADDING.left - PADDING.right - 2);
+  // clientWidth includes the wrapper's own padding (8px each side), subtract that + svg margins
+  const wrapperPad = 16; // .detail-mini-tl-wrap padding: 8px each side
+  const W = Math.max(100, (container.closest('.detail-mini-tl-wrap')?.clientWidth || container.clientWidth || 320) - wrapperPad - PADDING.left - PADDING.right);
   const numRows = children.length;
   const svgH = PADDING.top + numRows * (ROW_H + ROW_GAP) - ROW_GAP + TICK_H + 18 + PADDING.bottom;
 
@@ -720,11 +743,12 @@ function buildMiniTimeline(container, anim, children) {
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('id', 'mini-tl-svg');
   svg.setAttribute('data-tl-width', String(W));
+  const svgW = W + PADDING.left + PADDING.right;
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', String(svgH));
+  svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
   svg.style.display = 'block';
   svg.style.overflow = 'visible';
-  svg.style.maxWidth = String(W + PADDING.left + PADDING.right) + 'px';
 
   const g = document.createElementNS(ns, 'g');
   g.setAttribute('transform', `translate(${PADDING.left},${PADDING.top})`);
