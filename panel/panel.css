@@ -1993,10 +1993,67 @@ body { font-size: 13px; }
 .list-item-chevron:hover { color: var(--text); background: var(--bg-hover); }
 .list-item-chevron.open  { transform: rotate(90deg); color: var(--accent); }
 
-/* Icon-only buttons: reset line-height so SVG centers properly */
+/* Icon-only buttons: borderless, transparent background */
 .btn-icon {
   line-height: 0;
   padding: 4px 6px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.btn-icon:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+}
+
+.btn-icon:active {
+  background: var(--bg-tertiary);
+  border-color: transparent;
+}
+
+/* ── Mini-timeline SVG styles (detail pane) ─────────────────────────────── */
+.detail-mini-tl-wrap {
+  overflow-x: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  padding: 8px;
+}
+
+/* ── Breadcrumb in detail pane ───────────────────────────────────────────── */
+.detail-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-size: 11px;
+}
+.detail-breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.detail-breadcrumb-link:hover { background: var(--bg-hover); }
+.detail-breadcrumb-sep {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+.detail-breadcrumb-current {
+  color: var(--text-secondary);
+  font-size: 11px;
 }
 
 /* ── Code snippet block in detail pane ──────────────────────────────────── */

@@ -254,9 +254,6 @@ function applyAnimFilter(anims) {
   switch (animFilter) {
     case 'load-in':   return anims.filter((a) => !a.isScrollLinked && a.repeat !== -1 && a.type === 'tween');
     case 'scroll':    return anims.filter((a) => a.isScrollLinked);
-    case 'looping':   return anims.filter((a) => a.repeat === -1);
-    case 'hover':     return anims.filter((a) => a.paused && a.progress === 0 && a.repeat !== -1);
-    case 'paused':    return anims.filter((a) => a.paused);
     case 'timelines': return anims.filter((a) => a.type === 'timeline');
     default:          return anims;
   }
@@ -275,7 +272,9 @@ function applyStFilter(sts) {
 // ── Animation left pane ───────────────────────────────────────────────────────
 function renderAnimations(data) {
   const list     = document.getElementById('anim-list');
-  const topLevel = data.animations.filter((a) => a.depth <= 1);
+  // Only show items whose parent is the globalTimeline (parentId===null).
+  // Children of user-created timelines appear as inline rows under their parent.
+  const topLevel = data.animations.filter((a) => !a.parentId);
   const filtered = applyAnimFilter(topLevel);
 
   if (!filtered.length) {
@@ -481,7 +480,27 @@ function renderAnimDetail(id) {
   const animatedProps = Object.entries(anim.vars || {})
     .filter(([k]) => !['ease','duration','delay','repeat','yoyo','stagger'].includes(k));
 
-  let html = `
+  // Breadcrumb: shown when this tween is a child of a user timeline
+  const parentAnim = anim.parentId
+    ? lastData.animations.find((a) => a.id === anim.parentId)
+    : null;
+
+  let html = '';
+
+  if (parentAnim) {
+    html += `
+    <div class="detail-breadcrumb">
+      <button class="detail-breadcrumb-link" id="detail-breadcrumb-parent" data-parentid="${escapeAttr(parentAnim.id)}"
+        data-tooltip="Go back to the parent timeline that contains this tween.">
+        <span class="anim-type-tag timeline" style="font-size:8px">timeline</span>
+        ${escapeHtml(parentAnim.targetSelector || 'anonymous')}
+      </button>
+      <span class="detail-breadcrumb-sep">›</span>
+      <span class="detail-breadcrumb-current">${escapeHtml(anim.targetSelector || 'anonymous')}</span>
+    </div>`;
+  }
+
+  html += `
     <div class="detail-header">
       <span class="anim-type-tag ${anim.type}" data-tooltip="${escapeAttr(typeTooltip)}">${anim.type}</span>
       <span class="detail-target" data-tooltip="${escapeAttr(
@@ -573,6 +592,12 @@ function renderAnimDetail(id) {
   if (children.length) {
     html += `
     <div class="detail-section">
+      <div class="detail-section-header">Playback Timeline
+        <span data-tooltip="Visual representation of when each child tween starts and ends within this timeline. The red dashed line is the current playhead." style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--border);color:var(--text-secondary);font-size:9px;cursor:help;font-weight:700">?</span>
+      </div>
+      <div class="detail-mini-tl-wrap" id="mini-tl-placeholder"></div>
+    </div>
+    <div class="detail-section">
       <div class="detail-section-header">${children.length} Child Tween${children.length > 1 ? 's' : ''}
         <span data-tooltip="This timeline contains these tweens as children. The timeline's playhead controls them all together." style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--border);color:var(--text-secondary);font-size:9px;cursor:help;font-weight:700">?</span>
       </div>
@@ -612,6 +637,17 @@ function renderAnimDetail(id) {
   }
 
   container.innerHTML = html;
+
+  // Breadcrumb: navigate back to parent timeline
+  container.querySelector('#detail-breadcrumb-parent')?.addEventListener('click', (e) => {
+    selectAnim(e.currentTarget.dataset.parentid);
+  });
+
+  // Mini timeline (timelines only)
+  const miniTlPlaceholder = container.querySelector('#mini-tl-placeholder');
+  if (miniTlPlaceholder && children.length) {
+    buildMiniTimeline(miniTlPlaceholder, anim, children);
+  }
 
   container.querySelector('#detail-edit-btn')?.addEventListener('click', () => {
     if (lastData) {
@@ -659,6 +695,125 @@ function renderAnimDetail(id) {
   }
 }
 
+function buildMiniTimeline(container, anim, children) {
+  const PADDING = { top: 6, bottom: 22, left: 8, right: 8 };
+  const ROW_H = 16;
+  const ROW_GAP = 4;
+  const TICK_H = 6;
+  const totalDur = anim.duration || 1;
+
+  const W = (container.offsetWidth || 320) - PADDING.left - PADDING.right;
+  const numRows = children.length;
+  const svgH = PADDING.top + numRows * (ROW_H + ROW_GAP) - ROW_GAP + TICK_H + 18 + PADDING.bottom;
+
+  // Color coding by property type
+  function barColor(child) {
+    const props = Object.keys(child.vars || {});
+    if (props.some(p => /^(x|y|rotation|scale|skew|transform)/i.test(p))) return 'var(--tl-transform, #3b82f6)';
+    if (props.some(p => /^opacity$/i.test(p))) return 'var(--tl-opacity, #a855f7)';
+    if (props.some(p => /^(color|background|fill|stroke)/i.test(p))) return 'var(--tl-color, #ec4899)';
+    if (props.some(p => /^(width|height|margin|padding|top|left|right|bottom)/i.test(p))) return 'var(--tl-layout, #f59e0b)';
+    return 'var(--tl-other, #6b7280)';
+  }
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('id', 'mini-tl-svg');
+  svg.setAttribute('data-tl-width', String(W));
+  svg.setAttribute('width', String(W + PADDING.left + PADDING.right));
+  svg.setAttribute('height', String(svgH));
+  svg.style.display = 'block';
+  svg.style.overflow = 'visible';
+
+  const g = document.createElementNS(ns, 'g');
+  g.setAttribute('transform', `translate(${PADDING.left},${PADDING.top})`);
+  svg.appendChild(g);
+
+  // Draw rows
+  children.forEach((child, i) => {
+    const y = i * (ROW_H + ROW_GAP);
+    const st = (child.startTime || 0) / totalDur;
+    const dur = (child.duration || 0) / totalDur;
+    const x1 = Math.max(0, st * W);
+    const bw = Math.max(2, Math.min(dur * W, W - x1));
+    const color = barColor(child);
+
+    // Background track
+    const track = document.createElementNS(ns, 'rect');
+    track.setAttribute('x', '0');
+    track.setAttribute('y', String(y));
+    track.setAttribute('width', String(W));
+    track.setAttribute('height', String(ROW_H));
+    track.setAttribute('rx', '3');
+    track.setAttribute('fill', 'var(--bg-tertiary, #1e2030)');
+    g.appendChild(track);
+
+    // Active bar
+    const bar = document.createElementNS(ns, 'rect');
+    bar.setAttribute('x', String(x1));
+    bar.setAttribute('y', String(y));
+    bar.setAttribute('width', String(bw));
+    bar.setAttribute('height', String(ROW_H));
+    bar.setAttribute('rx', '3');
+    bar.setAttribute('fill', color);
+    bar.setAttribute('opacity', '0.85');
+    g.appendChild(bar);
+
+    // Label
+    const label = document.createElementNS(ns, 'text');
+    label.setAttribute('x', String(x1 + 4));
+    label.setAttribute('y', String(y + ROW_H - 4));
+    label.setAttribute('font-size', '9');
+    label.setAttribute('fill', 'var(--text-primary, #e2e8f0)');
+    label.setAttribute('pointer-events', 'none');
+    label.textContent = child.targetSelector || child.type || '?';
+    g.appendChild(label);
+  });
+
+  // Time axis
+  const axisY = numRows * (ROW_H + ROW_GAP) + 6;
+  const axis = document.createElementNS(ns, 'line');
+  axis.setAttribute('x1', '0'); axis.setAttribute('y1', String(axisY));
+  axis.setAttribute('x2', String(W)); axis.setAttribute('y2', String(axisY));
+  axis.setAttribute('stroke', 'var(--border, #2d3a55)');
+  axis.setAttribute('stroke-width', '1');
+  g.appendChild(axis);
+
+  const tickCount = 5;
+  for (let i = 0; i <= tickCount; i++) {
+    const x = (i / tickCount) * W;
+    const tick = document.createElementNS(ns, 'line');
+    tick.setAttribute('x1', String(x)); tick.setAttribute('y1', String(axisY));
+    tick.setAttribute('x2', String(x)); tick.setAttribute('y2', String(axisY + TICK_H));
+    tick.setAttribute('stroke', 'var(--border, #2d3a55)');
+    tick.setAttribute('stroke-width', '1');
+    g.appendChild(tick);
+
+    const lbl = document.createElementNS(ns, 'text');
+    lbl.setAttribute('x', String(x));
+    lbl.setAttribute('y', String(axisY + TICK_H + 10));
+    lbl.setAttribute('font-size', '8');
+    lbl.setAttribute('fill', 'var(--text-muted, #6b7280)');
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.textContent = ((i / tickCount) * totalDur).toFixed(2) + 's';
+    g.appendChild(lbl);
+  }
+
+  // Playhead
+  const ph = document.createElementNS(ns, 'line');
+  const phX = String((anim.progress || 0) * W);
+  ph.setAttribute('id', 'mini-tl-playhead');
+  ph.setAttribute('x1', phX); ph.setAttribute('y1', '0');
+  ph.setAttribute('x2', phX); ph.setAttribute('y2', String(axisY + TICK_H));
+  ph.setAttribute('stroke', 'var(--accent, #60a5fa)');
+  ph.setAttribute('stroke-width', '1.5');
+  ph.setAttribute('opacity', '0.9');
+  g.appendChild(ph);
+
+  container.innerHTML = '';
+  container.appendChild(svg);
+}
+
 function patchAnimDetail() {
   if (!selectedAnimId || !lastData) return;
   const anim = lastData.animations.find((a) => a.id === selectedAnimId);
@@ -681,6 +836,18 @@ function patchAnimDetail() {
   const scrub = container.querySelector('#detail-anim-scrub');
   if (scrub && document.activeElement !== scrub) {
     if (Math.abs(parseFloat(scrub.value) - anim.progress) > 0.005) scrub.value = anim.progress;
+  }
+
+  // Move mini-timeline playhead
+  const svg = container.querySelector('#mini-tl-svg');
+  if (svg) {
+    const W = parseFloat(svg.getAttribute('data-tl-width') || svg.getBoundingClientRect().width || 300);
+    const playhead = svg.querySelector('#mini-tl-playhead');
+    if (playhead) {
+      const x = String(anim.progress * W);
+      playhead.setAttribute('x1', x);
+      playhead.setAttribute('x2', x);
+    }
   }
 }
 
@@ -1034,13 +1201,6 @@ document.getElementById('btn-pause-all').addEventListener('click',   () => sendC
 document.getElementById('btn-reverse-all').addEventListener('click', () => sendCommand({ command: 'reverse_all' }));
 document.getElementById('btn-restart-all').addEventListener('click', () => sendCommand({ command: 'restart_all' }));
 
-document.querySelectorAll('.speed-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.speed-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    sendCommand({ command: 'set_timescale', value: parseFloat(btn.dataset.speed) });
-  });
-});
 
 // ── ScrollTrigger global controls ─────────────────────────────────────────────
 document.getElementById('markers-all').addEventListener('change', (e) => {
