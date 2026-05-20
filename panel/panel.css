@@ -1758,7 +1758,7 @@ body { font-size: 13px; }
   gap: 4px;
 }
 
-.stat-value.stat-sm { font-size: 11px; }
+.stat-value.stat-sm { font-size: 13px; font-family: inherit; font-weight: 500; }
 
 /* ── Detail playback ────────────────────────────────────────────────────── */
 .detail-playback {
@@ -2018,11 +2018,12 @@ body { font-size: 13px; }
 
 /* ── Mini-timeline SVG styles (detail pane) ─────────────────────────────── */
 .detail-mini-tl-wrap {
-  overflow-x: hidden;
+  overflow: visible;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--bg-secondary);
   padding: 8px;
+  box-sizing: border-box;
 }
 
 /* ── Breadcrumb in detail pane (Chakra UI style) ─────────────────────────── */

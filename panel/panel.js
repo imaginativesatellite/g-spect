@@ -515,7 +515,7 @@ function renderAnimDetail(id) {
     <div class="detail-stats">
       <div class="stat">
         <span class="stat-label">State</span>
-        <span class="stat-value"><span class="dot ${cls}" id="detail-state-dot"></span>&nbsp;<span id="detail-state-label" style="font-size:13px;font-family:system-ui">${stateLabel}</span></span>
+        <span class="stat-value"><span class="dot ${cls}" id="detail-state-dot"></span><span id="detail-state-label">${stateLabel}</span></span>
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="How far through the animation. 0% = start, 100% = end.">Progress</span>
@@ -702,7 +702,7 @@ function buildMiniTimeline(container, anim, children) {
   const TICK_H = 6;
   const totalDur = anim.duration || 1;
 
-  const W = (container.offsetWidth || 320) - PADDING.left - PADDING.right;
+  const W = Math.max(100, (container.clientWidth || container.offsetWidth || 320) - PADDING.left - PADDING.right - 2);
   const numRows = children.length;
   const svgH = PADDING.top + numRows * (ROW_H + ROW_GAP) - ROW_GAP + TICK_H + 18 + PADDING.bottom;
 
@@ -720,10 +720,11 @@ function buildMiniTimeline(container, anim, children) {
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('id', 'mini-tl-svg');
   svg.setAttribute('data-tl-width', String(W));
-  svg.setAttribute('width', String(W + PADDING.left + PADDING.right));
+  svg.setAttribute('width', '100%');
   svg.setAttribute('height', String(svgH));
   svg.style.display = 'block';
   svg.style.overflow = 'visible';
+  svg.style.maxWidth = String(W + PADDING.left + PADDING.right) + 'px';
 
   const g = document.createElementNS(ns, 'g');
   g.setAttribute('transform', `translate(${PADDING.left},${PADDING.top})`);
