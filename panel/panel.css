@@ -585,42 +585,56 @@ body {
   line-height: 1.2;
 }
 
-/* ── Plugin cards ─────────────────────────────────────────────────────────── */
+/* ── Plugin cards (Chakra UI Card style) ──────────────────────────────────── */
 .plugin-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
 .plugin-card {
-  background: var(--bg-secondary);
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  overflow: hidden;
+}
+
+.plugin-card-header {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .plugin-card-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  line-height: 1.3;
+}
+
+.plugin-card-body {
+  padding: 10px 14px;
+  flex: 1;
 }
 
 .plugin-card-desc {
   font-size: 11px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  flex: 1;
+  line-height: 1.55;
 }
 
 .plugin-card-footer {
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--border);
   display: flex;
-  justify-content: flex-end;
-  margin-top: 2px;
+  align-items: center;
 }
+
+/* Remove underline from any <a> styled as a button */
+a.btn, a.btn:hover, a.btn:visited { text-decoration: none; }
 
 /* ── Filter bar ───────────────────────────────────────────────────────────── */
 .filter-bar {

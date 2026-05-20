@@ -229,8 +229,12 @@ function renderOverview(data) {
       const desc = PLUGIN_TOOLTIPS[p] || `${p} plugin`;
       const docsUrl = PLUGIN_DOCS[p] || 'https://gsap.com/docs/v3/Plugins/';
       return `<div class="plugin-card">
-        <div class="plugin-card-title">${escapeHtml(p)}</div>
-        <div class="plugin-card-desc">${escapeHtml(desc)}</div>
+        <div class="plugin-card-header">
+          <div class="plugin-card-title">${escapeHtml(p)}</div>
+        </div>
+        <div class="plugin-card-body">
+          <div class="plugin-card-desc">${escapeHtml(desc)}</div>
+        </div>
         <div class="plugin-card-footer">
           <a class="btn btn-sm" href="${escapeAttr(docsUrl)}" target="_blank" rel="noopener">Docs →</a>
         </div>
