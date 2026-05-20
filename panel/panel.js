@@ -33,6 +33,7 @@ const ICONS = {
   x:            'ph-x',
   chevronRight: 'ph-caret-right',
   copy:         'ph-copy',
+  check:        'ph-check',
   code:         'ph-code',
   link:         'ph-link',
 };
@@ -419,6 +420,15 @@ function buildListGroup(anim, allAnimations) {
       `;
 
       childRow.addEventListener('click', () => selectAnim(child.id));
+      childRow.addEventListener('mouseenter', () => {
+        if (!elementInspectorActive) return;
+        sendCommand({ command: 'highlight_element', id: child.id, label: child.targetSelector || 'tween' });
+      });
+      childRow.addEventListener('mouseleave', () => {
+        if (!elementInspectorActive) return;
+        sendCommand({ command: 'unhighlight_element' });
+      });
+      animItemMap.set(child.id, childRow);
       childrenContainer.appendChild(childRow);
     });
 
@@ -553,7 +563,7 @@ function renderAnimDetail(id) {
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="Easing function controlling acceleration. power2.out = decelerates, elastic = bounces, none = linear.">Ease</span>
-        <span class="stat-value stat-sm">${escapeHtml(anim.vars?.ease || 'default')}</span>
+        <span class="stat-value">${escapeHtml(anim.vars?.ease || 'default')}</span>
       </div>
       ${typeof anim.repeat === 'number' && anim.repeat !== 0 ? `
       <div class="stat">
@@ -713,8 +723,18 @@ function renderAnimDetail(id) {
   });
 
   if (code) {
-    container.querySelector('#detail-copy-code')?.addEventListener('click', () => {
+    container.querySelector('#detail-copy-code')?.addEventListener('click', (e) => {
       navigator.clipboard.writeText(code);
+      const btn = e.currentTarget;
+      const orig = btn.innerHTML;
+      btn.innerHTML = `${icon('check', 14)} Copied`;
+      btn.style.color = 'var(--success)';
+      btn.style.borderColor = 'var(--success)';
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 1600);
     });
   }
 }
@@ -986,9 +1006,6 @@ function renderStDetail(id) {
 
   let html = `
     <div class="detail-header">
-      <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0;
-        background:#0ea5e922;color:#0ea5e9;border:1px solid #0ea5e944"
-        data-tooltip="A ScrollTrigger links animation playback or actions to the page scroll position.">scrolltrigger</span>
       <span class="detail-target"
         data-tooltip="${escapeAttr(st.triggerSelector
           ? 'The CSS selector of the element that triggers this ScrollTrigger.'
@@ -999,7 +1016,7 @@ function renderStDetail(id) {
     <div class="detail-stats">
       <div class="stat">
         <span class="stat-label">State</span>
-        <span class="stat-value"><span class="dot ${st.isActive ? 'dot-active' : 'dot-paused'}" id="detail-st-dot"></span>&nbsp;<span id="detail-st-state" style="font-size:13px;font-family:system-ui">${st.isActive ? 'Active' : 'Inactive'}</span></span>
+        <span class="stat-value"><span class="dot ${st.isActive ? 'dot-active' : 'dot-paused'}" id="detail-st-dot"></span><span id="detail-st-state">${st.isActive ? 'Active' : 'Inactive'}</span></span>
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="0% = scroll at the start position, 100% = scroll at the end position.">Progress</span>
@@ -1007,15 +1024,15 @@ function renderStDetail(id) {
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="Where this trigger activates. Format: 'elementEdge viewportEdge'. e.g. 'top center' = when the element top hits the viewport centre.">Start</span>
-        <span class="stat-value stat-sm">${escapeHtml(st.start)}</span>
+        <span class="stat-value">${escapeHtml(st.start)}</span>
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="Where this trigger deactivates. Same format as start.">End</span>
-        <span class="stat-value stat-sm">${escapeHtml(st.end)}</span>
+        <span class="stat-value">${escapeHtml(st.end)}</span>
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="Scrub ties animation progress directly to scroll position so dragging the scrollbar drags the animation. Without scrub, the animation plays when the trigger fires.">Scrub</span>
-        <span class="stat-value stat-sm">${escapeHtml(scrubLabel)}</span>
+        <span class="stat-value">${escapeHtml(scrubLabel)}</span>
       </div>
       ${st.pin ? `<div class="stat">
         <span class="stat-label" data-tooltip="Pin fixes the trigger element in place while the scroll continues, creating a sticky scroll effect.">Pin</span>
@@ -1219,9 +1236,6 @@ document.getElementById('btn-restart-all').addEventListener('click', () => sendC
 
 
 // ── ScrollTrigger global controls ─────────────────────────────────────────────
-document.getElementById('markers-all').addEventListener('change', (e) => {
-  sendCommand({ command: 'toggle_markers_all', value: e.target.checked });
-});
 
 document.getElementById('btn-st-refresh').addEventListener('click', () => {
   sendCommand({ command: 'inject_js', code: 'if (window.ScrollTrigger) ScrollTrigger.refresh();' });

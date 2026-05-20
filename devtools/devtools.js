@@ -1,7 +1,7 @@
-// devtools.js — Creates the GSAP Inspector panel in Chrome DevTools.
+// devtools.js — Creates the G-spect panel in Chrome DevTools.
 
 chrome.devtools.panels.create(
-  'GSAP Inspector',
+  'G-spect',
   '../icons/icon16.svg',
   '../panel/panel.html',
   (panel) => {

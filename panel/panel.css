@@ -620,8 +620,7 @@ body {
 }
 
 .plugin-card-header {
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 14px 6px;
 }
 
 .plugin-card-title {
@@ -643,14 +642,16 @@ body {
 }
 
 .plugin-card-footer {
-  padding: 8px 14px 12px;
-  border-top: 1px solid var(--border);
+  padding: 6px 14px 12px;
   display: flex;
   align-items: center;
 }
 
-/* Remove underline from any <a> styled as a button */
-a.btn, a.btn:hover, a.btn:visited { text-decoration: none; }
+/* <a> styled as a button — strip all link defaults */
+a.btn, a.btn:hover, a.btn:visited, a.btn:active {
+  text-decoration: none;
+  color: var(--text);
+}
 
 /* ── Filter bar ───────────────────────────────────────────────────────────── */
 .filter-bar {
@@ -2129,8 +2130,8 @@ body { font-size: 13px; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  padding: 7px 0;
-  margin: 0 14px;
+  padding: 7px 16px;
+  margin: -16px -16px 0;
   border-bottom: 1px solid var(--border);
   background: transparent;
   font-size: 12px;

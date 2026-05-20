@@ -13,7 +13,7 @@
 
     <!-- ── Header ─────────────────────────────────────────────────────────── -->
     <div class="panel-header">
-      <span class="panel-title">GSAP Inspector</span>
+      <span class="panel-title">G-spect</span>
       <span id="gsap-version-badge" class="badge" style="display:none"></span>
       <span id="webflow-badge" class="badge badge-webflow" style="display:none">Webflow</span>
       <span class="header-spacer"></span>
@@ -162,19 +162,6 @@
       <!-- Left pane -->
       <div class="pane-left">
         <div class="pane-left-header">
-          <div class="pane-toolbar">
-            <span class="section-header" style="margin:0;flex:1">ScrollTrigger</span>
-            <label class="toggle-row" data-tooltip="Toggle debug marker lines for all triggers simultaneously.">
-              All Markers
-              <span class="toggle-switch">
-                <input type="checkbox" id="markers-all">
-                <span class="toggle-slider"></span>
-              </span>
-            </label>
-            <button id="btn-st-refresh" class="btn-icon" data-tooltip="Recalculate all trigger positions after layout changes.">
-              <i class="ph-light ph-arrows-clockwise"></i>
-            </button>
-          </div>
           <div class="filter-bar" id="st-filter-bar">
             <button class="filter-chip active" data-filter="all">All</button>
             <button class="filter-chip" data-filter="scrub"
@@ -185,6 +172,10 @@
               data-tooltip="Pins an element while scrolling past it.">Pinned</button>
             <button class="filter-chip" data-filter="active"
               data-tooltip="Currently in the active scroll range.">Active</button>
+            <span class="filter-bar-spacer"></span>
+            <button id="btn-st-refresh" class="btn btn-icon" data-tooltip="Recalculate all trigger positions after layout changes.">
+              <i class="ph-light ph-arrows-clockwise"></i>
+            </button>
           </div>
         </div>
 
