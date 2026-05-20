@@ -5,17 +5,17 @@
 /* ── Custom properties (light mode defaults) ─────────────────────────────── */
 :root {
   --bg:             #ffffff;
-  --bg-secondary:   #f8f9fa;
-  --bg-tertiary:    #f0f1f2;
-  --bg-hover:       #edf0f3;
-  --border:         #dde1e6;
-  --border-light:   #eaecef;
-  --text:           #1a1a1a;
-  --text-secondary: #5f6b7a;
-  --text-muted:     #8a96a3;
-  --accent:         #3B82F6;
-  --accent-hover:   #2563EB;
-  --accent-light:   #EFF6FF;
+  --bg-secondary:   #f8fafc;
+  --bg-tertiary:    #f1f5f9;
+  --bg-hover:       #ecf9f4;
+  --border:         #e2e8f0;
+  --border-light:   #f0f4f8;
+  --text:           #111827;
+  --text-secondary: #4b5563;
+  --text-muted:     #9ca3af;
+  --accent:         #10B981;
+  --accent-hover:   #059669;
+  --accent-light:   #ECFDF5;
   --success:        #16a34a;
   --success-bg:     #f0fdf4;
   --error:          #dc2626;
@@ -55,9 +55,9 @@
     --text:           #cccccc;
     --text-secondary: #9d9d9d;
     --text-muted:     #6a6a6a;
-    --accent:         #4d9ef6;
-    --accent-hover:   #60aeff;
-    --accent-light:   #1a2940;
+    --accent:         #34d399;
+    --accent-hover:   #6ee7b7;
+    --accent-light:   #022c22;
     --success:        #4caf72;
     --success-bg:     #1a2e1f;
     --error:          #f47474;
@@ -270,7 +270,7 @@ body {
 .badge-plugin {
   background: var(--accent-light);
   color: var(--accent);
-  border-color: #3b82f633;
+  border-color: #10b98133;
   cursor: help;
 }
 
@@ -634,7 +634,7 @@ body {
 .anim-type-tag.tween {
   background: var(--accent-light);
   color: var(--accent);
-  border: 1px solid #3b82f633;
+  border: 1px solid #10b98133;
 }
 
 /* highlighted row from reverse element inspector */

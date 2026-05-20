@@ -1031,14 +1031,6 @@ function renderStDetail(id) {
     </div>`;
   }
 
-  html += `
-    <div class="detail-section">
-      <div class="detail-section-header">Actions</div>
-      <button class="btn" id="detail-st-refresh"
-        data-tooltip="Recalculate all ScrollTrigger positions — run this after layout changes, image loads, or font changes that affect page height.">Refresh All Triggers</button>
-    </div>
-  `;
-
   container.innerHTML = html;
 
   container.querySelector('#detail-st-markers')?.addEventListener('change', (e) => {
@@ -1049,10 +1041,6 @@ function renderStDetail(id) {
     const animId = e.currentTarget.dataset.animid;
     switchToTab('animations');
     setTimeout(() => selectAnim(animId), 60);
-  });
-
-  container.querySelector('#detail-st-refresh')?.addEventListener('click', () => {
-    sendCommand({ command: 'inject_js', code: 'if (window.ScrollTrigger) ScrollTrigger.refresh();' });
   });
 }
 
