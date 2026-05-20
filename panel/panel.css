@@ -1904,3 +1904,144 @@ body { font-size: 13px; }
   background: var(--accent-light);
   border-left-color: var(--accent);
 }
+
+/* ── Animations tab outer shell ─────────────────────────────────────────── */
+.anim-tab-outer {
+  padding: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+/* ── Full-width global playback strip ───────────────────────────────────── */
+.global-strip-full {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Inner two-pane wrapper (below the global strip) ────────────────────── */
+.two-pane-inner {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Resize handle ──────────────────────────────────────────────────────── */
+.resize-handle {
+  width: 4px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: var(--border);
+  transition: background 0.15s;
+  position: relative;
+  z-index: 1;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+  background: var(--accent);
+}
+
+/* ── Expandable timeline groups in left pane ────────────────────────────── */
+.list-item-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-item-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-item-child {
+  padding-left: 28px;
+  background: var(--bg-secondary);
+  border-left: 2px solid transparent;
+  min-height: 36px;
+}
+
+.list-item-child:hover { background: var(--bg-hover); }
+
+.list-item-child.selected {
+  background: var(--accent-light);
+  border-left-color: var(--accent);
+}
+
+/* Chevron in list items */
+.list-item-chevron {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s, color 0.15s;
+  border-radius: 2px;
+}
+
+.list-item-chevron:hover { color: var(--text); background: var(--bg-hover); }
+.list-item-chevron.open  { transform: rotate(90deg); color: var(--accent); }
+
+/* Icon-only buttons: reset line-height so SVG centers properly */
+.btn-icon {
+  line-height: 0;
+  padding: 4px 6px;
+}
+
+/* ── Code snippet block in detail pane ──────────────────────────────────── */
+.detail-code-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.detail-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+
+.detail-code-lang {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.detail-code-pre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text);
+  padding: 10px 12px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* Syntax-colour the generated code (lightweight, no library) */
+.detail-code-pre .kw  { color: #c678dd; }   /* gsap, const, let */
+.detail-code-pre .fn  { color: #61afef; }   /* .to, .from, .timeline */
+.detail-code-pre .str { color: #98c379; }   /* strings */
+.detail-code-pre .num { color: #d19a66; }   /* numbers */
+.detail-code-pre .key { color: #e06c75; }   /* property names */
+
+/* ── SVG icon alignment inside btn-sm ───────────────────────────────────── */
+.btn-sm svg, .btn-icon svg { vertical-align: middle; }

@@ -14,7 +14,9 @@
       <span id="webflow-badge" class="badge badge-webflow" style="display:none">Webflow</span>
       <span class="header-spacer"></span>
       <button id="btn-element-inspector" class="btn btn-icon btn-element-inspector"
-        data-tooltip="Element Inspector: hover animations or ScrollTriggers to highlight their targets on the page. Also works in reverse — hover page elements to find matching animations.">🎯</button>
+        data-tooltip="Element Inspector: hover animations or ScrollTriggers to highlight their targets on the page. Also works in reverse — hover page elements to find matching animations.">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+      </button>
       <button id="btn-reset" class="btn btn-reset"
         data-tooltip="Kill all GSAP animations, clear saved overrides for this URL, and reload the page. Cannot be undone.">
         Reset &amp; Reload
@@ -25,6 +27,7 @@
     <div class="tabs" role="tablist">
       <button class="tab active" data-tab="overview"      role="tab" aria-selected="true">Overview</button>
       <button class="tab"        data-tab="animations"    role="tab">Animations</button>
+      <button class="tab"        data-tab="timeline"      role="tab">Timeline</button>
       <button class="tab"        data-tab="scrolltrigger" role="tab">ScrollTrigger</button>
       <button class="tab"        data-tab="linter"        role="tab">Linter</button>
       <button class="tab"        data-tab="code"          role="tab">Code</button>
@@ -71,76 +74,97 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <!-- ANIMATIONS TAB — two-pane layout                                    -->
+    <!-- ANIMATIONS TAB — full-width strip + two-pane layout                 -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div id="tab-animations" class="tab-content two-pane-tab">
+    <div id="tab-animations" class="tab-content anim-tab-outer">
 
-      <!-- Left pane -->
-      <div class="pane-left">
-        <div class="pane-left-header">
+      <!-- Full-width global playback strip -->
+      <div class="global-strip-full">
+        <span class="global-strip-label" data-tooltip="Controls GSAP's master timeline — pausing it freezes every animation simultaneously.">Global</span>
+        <button id="btn-restart-all" class="btn btn-icon" data-tooltip="Restart all">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20"/></svg>
+        </button>
+        <button id="btn-play-all" class="btn btn-icon" data-tooltip="Play all">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+        <button id="btn-pause-all" class="btn btn-icon" data-tooltip="Pause all">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+        <button id="btn-reverse-all" class="btn btn-icon" data-tooltip="Reverse all">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.08"/></svg>
+        </button>
+        <div class="speed-btns">
+          <button class="btn speed-btn" data-speed="0.25">¼×</button>
+          <button class="btn speed-btn" data-speed="0.5">½×</button>
+          <button class="btn speed-btn active" data-speed="1">1×</button>
+          <button class="btn speed-btn" data-speed="2">2×</button>
+        </div>
+      </div>
 
-          <!-- Global playback mini strip -->
-          <div class="global-strip">
-            <span class="global-strip-label" data-tooltip="Controls GSAP's master timeline — pausing it freezes every animation simultaneously.">Global</span>
-            <button id="btn-restart-all" class="btn btn-icon" data-tooltip="Restart all">⏮</button>
-            <button id="btn-play-all"    class="btn btn-icon" data-tooltip="Play all">▶</button>
-            <button id="btn-pause-all"   class="btn btn-icon" data-tooltip="Pause all">⏸</button>
-            <button id="btn-reverse-all" class="btn btn-icon" data-tooltip="Reverse all">◀</button>
-            <div class="speed-btns">
-              <button class="btn speed-btn" data-speed="0.25">¼×</button>
-              <button class="btn speed-btn" data-speed="0.5">½×</button>
-              <button class="btn speed-btn active" data-speed="1">1×</button>
-              <button class="btn speed-btn" data-speed="2">2×</button>
+      <!-- Inner two-pane wrapper -->
+      <div class="two-pane-inner">
+
+        <!-- Left pane -->
+        <div class="pane-left">
+          <div class="pane-left-header">
+
+            <!-- Toolbar: collapse/expand -->
+            <div class="pane-toolbar">
+              <button class="btn btn-sm" id="btn-collapse-all"
+                data-tooltip="Collapse all timeline groups">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/></svg>
+              </button>
+              <button class="btn btn-sm" id="btn-expand-all"
+                data-tooltip="Expand all timeline groups">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
+            </div>
+
+            <!-- Filter chips -->
+            <div class="filter-bar" id="anim-filter-bar">
+              <button class="filter-chip active" data-filter="all">All</button>
+              <button class="filter-chip" data-filter="load-in"
+                data-tooltip="Plays once on page load, no repeat. Typical for hero/entrance effects.">Load-in</button>
+              <button class="filter-chip" data-filter="scroll"
+                data-tooltip="Progress tied to scroll position via ScrollTrigger scrub.">Scroll</button>
+              <button class="filter-chip" data-filter="hover"
+                data-tooltip="Paused at progress 0 — the standard pattern for hover-triggered animations.">Hover</button>
+              <button class="filter-chip" data-filter="looping"
+                data-tooltip="repeat: -1 — loops continuously.">Loop</button>
+              <button class="filter-chip" data-filter="paused"
+                data-tooltip="Currently paused.">Paused</button>
+              <button class="filter-chip" data-filter="timelines"
+                data-tooltip="Show only timeline containers.">Timelines</button>
             </div>
           </div>
 
-          <!-- View toggle + collapse -->
-          <div class="pane-toolbar">
-            <button class="btn btn-sm view-btn active" id="btn-list-view">List</button>
-            <button class="btn btn-sm view-btn" id="btn-timeline-view">Timeline</button>
-            <span class="toolbar-sep"></span>
-            <button class="btn btn-sm" id="btn-collapse-all" data-tooltip="Collapse all items to show only the first line.">⊟</button>
-            <button class="btn btn-sm" id="btn-expand-all"   data-tooltip="Expand all items to show full controls.">⊞</button>
-          </div>
-
-          <!-- Filter chips -->
-          <div class="filter-bar" id="anim-filter-bar">
-            <button class="filter-chip active" data-filter="all">All</button>
-            <button class="filter-chip" data-filter="load-in"
-              data-tooltip="Plays once on page load, no repeat. Typical for hero/entrance effects.">Load-in</button>
-            <button class="filter-chip" data-filter="scroll"
-              data-tooltip="Progress tied to scroll position via ScrollTrigger scrub.">Scroll</button>
-            <button class="filter-chip" data-filter="hover"
-              data-tooltip="Paused at progress 0 — the standard pattern for hover-triggered animations.">Hover</button>
-            <button class="filter-chip" data-filter="looping"
-              data-tooltip="repeat: -1 — loops continuously.">Loop</button>
-            <button class="filter-chip" data-filter="paused"
-              data-tooltip="Currently paused.">Paused</button>
-            <button class="filter-chip" data-filter="timelines"
-              data-tooltip="Show only timeline containers.">Timelines</button>
+          <!-- List -->
+          <div class="pane-list-wrap">
+            <div id="anim-list" class="pane-list"></div>
           </div>
         </div>
 
-        <!-- List view -->
-        <div id="anim-list-view" class="pane-list-wrap">
-          <div id="anim-list" class="pane-list"></div>
-        </div>
+        <!-- Resize handle -->
+        <div class="resize-handle" id="anim-resize"></div>
 
-        <!-- Timeline / Gantt view -->
-        <div id="anim-timeline-view" class="pane-list-wrap" style="display:none">
-          <div id="timeline-container" class="tl-container"></div>
-        </div>
-      </div>
-
-      <!-- Right pane -->
-      <div class="pane-right">
-        <div id="anim-detail" class="detail-panel">
-          <div class="detail-empty">
-            <div class="detail-empty-icon">▶</div>
-            <p>Select an animation from the list</p>
+        <!-- Right pane -->
+        <div class="pane-right">
+          <div id="anim-detail" class="detail-panel">
+            <div class="detail-empty">
+              <div class="detail-empty-icon">▶</div>
+              <p>Select an animation from the list</p>
+            </div>
           </div>
         </div>
-      </div>
+
+      </div><!-- /.two-pane-inner -->
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TIMELINE TAB                                                         -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tab-timeline" class="tab-content" style="padding:0;overflow:hidden">
+      <div id="timeline-container" class="tl-container" style="padding:10px;box-sizing:border-box"></div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -160,7 +184,9 @@
                 <span class="toggle-slider"></span>
               </span>
             </label>
-            <button id="btn-st-refresh" class="btn btn-sm" data-tooltip="Recalculate all trigger positions after layout changes.">Refresh</button>
+            <button id="btn-st-refresh" class="btn btn-sm" data-tooltip="Recalculate all trigger positions after layout changes.">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
           </div>
           <div class="filter-bar" id="st-filter-bar">
             <button class="filter-chip active" data-filter="all">All</button>
@@ -181,6 +207,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Resize handle -->
+      <div class="resize-handle" id="st-resize"></div>
 
       <!-- Right pane -->
       <div class="pane-right">
@@ -262,7 +291,9 @@
     <div class="modal-content">
       <div class="modal-header">
         <span id="modal-title">Edit Tween</span>
-        <button id="modal-close" class="btn btn-icon">✕</button>
+        <button id="modal-close" class="btn btn-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div id="prop-editor" class="prop-editor"></div>
       <div class="modal-actions">

@@ -11,10 +11,10 @@ port.postMessage({ type: 'devtools_connect', tabId: chrome.devtools.inspectedWin
 // ── State ─────────────────────────────────────────────────────────────────────
 let lastData             = null;
 let timelineView         = null;
-let currentView          = 'list';
 let stOrderIds           = [];
 const animItemMap        = new Map();
 const stItemMap          = new Map();
+const expandedTimelineIds = new Set();
 let lastAnimIds          = '';
 let lastStIds            = '';
 let animFilter           = 'all';
@@ -22,6 +22,26 @@ let stFilter             = 'all';
 let elementInspectorActive = false;
 let selectedAnimId       = null;
 let selectedStId         = null;
+
+// ── Icon helpers ──────────────────────────────────────────────────────────────
+const ICONS = {
+  play:         `<polygon points="5 3 19 12 5 21 5 3"/>`,
+  pause:        `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`,
+  skipBack:     `<polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20"/>`,
+  rotateCcw:    `<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.08"/>`,
+  x:            `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
+  chevronRight: `<polyline points="9 18 15 12 9 6"/>`,
+  refreshCw:    `<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`,
+  copy:         `<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`,
+  code:         `<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>`,
+  link:         `<path d="M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3"/><line x1="8" y1="12" x2="16" y2="12"/>`,
+};
+
+function icon(name, size = 14) {
+  const paths = ICONS[name];
+  if (!paths) return '';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
 
 // ── Message handling ──────────────────────────────────────────────────────────
 port.onMessage.addListener((msg) => {
@@ -83,32 +103,41 @@ function switchToTab(name) {
   });
   document.querySelectorAll('.tab-content').forEach((c) => c.classList.remove('active'));
   document.getElementById(`tab-${name}`)?.classList.add('active');
-  if (name === 'animations' && currentView === 'timeline' && lastData) renderTimelineView(lastData);
-  if (name === 'linter'     && lastData)  renderLinter(lastData);
-  if (name === 'overrides')               renderOverrides();
+  if (name === 'timeline'  && lastData) renderTimelineView(lastData);
+  if (name === 'linter'    && lastData) renderLinter(lastData);
+  if (name === 'overrides')             renderOverrides();
 }
 
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => switchToTab(tab.dataset.tab));
 });
 
-// ── View toggle (List / Timeline) ─────────────────────────────────────────────
-document.getElementById('btn-list-view').addEventListener('click', () => {
-  currentView = 'list';
-  document.getElementById('btn-list-view').classList.add('active');
-  document.getElementById('btn-timeline-view').classList.remove('active');
-  document.getElementById('anim-list-view').style.display   = '';
-  document.getElementById('anim-timeline-view').style.display = 'none';
-});
-
-document.getElementById('btn-timeline-view').addEventListener('click', () => {
-  currentView = 'timeline';
-  document.getElementById('btn-timeline-view').classList.add('active');
-  document.getElementById('btn-list-view').classList.remove('active');
-  document.getElementById('anim-list-view').style.display   = 'none';
-  document.getElementById('anim-timeline-view').style.display = '';
-  if (lastData) renderTimelineView(lastData);
-});
+// ── Resize handles ────────────────────────────────────────────────────────────
+function initResize(handleId) {
+  const handle = document.getElementById(handleId);
+  if (!handle) return;
+  const leftPane = handle.previousElementSibling;
+  let startX, startW;
+  handle.addEventListener('mousedown', (e) => {
+    startX = e.clientX;
+    startW = leftPane.offsetWidth;
+    handle.classList.add('dragging');
+    const onMove = (e) => {
+      const w = Math.max(140, Math.min(520, startW + e.clientX - startX));
+      leftPane.style.width = w + 'px';
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  });
+}
+initResize('anim-resize');
+initResize('st-resize');
 
 // ── Animation filter chips ────────────────────────────────────────────────────
 document.querySelectorAll('#anim-filter-bar .filter-chip').forEach((chip) => {
@@ -258,7 +287,6 @@ function renderAnimations(data) {
       animItemMap.clear();
       lastAnimIds = '';
     }
-    if (currentView === 'timeline') renderTimelineView(data);
     return;
   }
 
@@ -268,9 +296,9 @@ function renderAnimations(data) {
     list.innerHTML = '';
     animItemMap.clear();
     filtered.forEach((anim) => {
-      const item = buildListItem(anim);
-      animItemMap.set(anim.id, item);
-      list.appendChild(item);
+      const { group, row } = buildListGroup(anim, data.animations);
+      animItemMap.set(anim.id, row);
+      list.appendChild(group);
     });
     if (selectedAnimId) {
       animItemMap.get(selectedAnimId)?.classList.add('selected');
@@ -280,13 +308,20 @@ function renderAnimations(data) {
   }
 
   if (selectedAnimId) patchAnimDetail();
-  if (currentView === 'timeline') renderTimelineView(data);
 }
 
-function buildListItem(anim) {
-  const item = document.createElement('div');
-  item.className  = 'list-item';
-  item.dataset.id = anim.id;
+function buildListGroup(anim, allAnimations) {
+  const children = anim.type === 'timeline'
+    ? allAnimations.filter((a) => a.parentId === anim.id)
+    : [];
+
+  const group = document.createElement('div');
+  group.className = 'list-item-group';
+
+  // Main row
+  const row = document.createElement('div');
+  row.className  = 'list-item';
+  row.dataset.id = anim.id;
 
   const cls   = anim.paused ? 'dot-paused' : anim.progress >= 1 ? 'dot-complete' : 'dot-active';
   const label = anim.paused ? 'Paused'     : anim.progress >= 1 ? 'Complete'     : 'Playing';
@@ -294,7 +329,15 @@ function buildListItem(anim) {
     ? `<span class="badge badge-scroll" style="font-size:9px;padding:0 5px" data-tooltip="Progress is controlled by scroll position.">scroll</span>`
     : '';
 
-  item.innerHTML = `
+  const chevronHtml = children.length
+    ? `<button class="list-item-chevron${expandedTimelineIds.has(anim.id) ? ' open' : ''}"
+        data-tooltip="Toggle child tweens" aria-label="Toggle children">
+        ${icon('chevronRight', 12)}
+      </button>`
+    : `<span style="width:16px;flex-shrink:0"></span>`;
+
+  row.innerHTML = `
+    ${chevronHtml}
     <span class="dot ${cls}" data-tooltip="State: ${label}"></span>
     <span class="anim-type-tag ${anim.type}"
       data-tooltip="${anim.type === 'timeline'
@@ -310,16 +353,68 @@ function buildListItem(anim) {
     <span class="list-item-meta">${anim.duration.toFixed(1)}s</span>
   `;
 
-  item.addEventListener('click', () => selectAnim(anim.id));
-  item.addEventListener('mouseenter', () => {
+  row.addEventListener('click', (e) => {
+    // Don't select if chevron was clicked
+    if (!e.target.closest('.list-item-chevron')) selectAnim(anim.id);
+  });
+  row.addEventListener('mouseenter', () => {
     if (!elementInspectorActive) return;
     sendCommand({ command: 'highlight_element', id: anim.id, label: anim.targetSelector || 'animation' });
   });
-  item.addEventListener('mouseleave', () => {
+  row.addEventListener('mouseleave', () => {
     if (!elementInspectorActive) return;
     sendCommand({ command: 'unhighlight_element' });
   });
-  return item;
+
+  group.appendChild(row);
+
+  // Children container (timelines only)
+  if (children.length) {
+    const childrenContainer = document.createElement('div');
+    childrenContainer.className = 'list-item-children';
+    childrenContainer.style.display = expandedTimelineIds.has(anim.id) ? '' : 'none';
+
+    children.forEach((child) => {
+      const childRow = document.createElement('div');
+      childRow.className  = 'list-item list-item-child';
+      childRow.dataset.id = child.id;
+
+      const childCls   = child.paused ? 'dot-paused' : child.progress >= 1 ? 'dot-complete' : 'dot-active';
+      const childLabel = child.paused ? 'Paused'     : child.progress >= 1 ? 'Complete'     : 'Playing';
+      const childProps = Object.keys(child.vars || {})
+        .filter((k) => !['ease','duration','delay','repeat','yoyo','stagger'].includes(k));
+
+      childRow.innerHTML = `
+        <span style="width:16px;flex-shrink:0"></span>
+        <span class="dot ${childCls}" data-tooltip="State: ${childLabel}"></span>
+        <span class="anim-type-tag tween" style="font-size:8px">tween</span>
+        <span class="list-item-target">${escapeHtml(child.targetSelector || 'anonymous')}</span>
+        <span class="list-item-meta">${child.duration.toFixed(1)}s</span>
+      `;
+
+      childRow.addEventListener('click', () => selectAnim(child.id));
+      childrenContainer.appendChild(childRow);
+    });
+
+    group.appendChild(childrenContainer);
+
+    // Chevron toggle
+    const chevronBtn = row.querySelector('.list-item-chevron');
+    if (chevronBtn) {
+      chevronBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = chevronBtn.classList.toggle('open');
+        childrenContainer.style.display = isOpen ? '' : 'none';
+        if (isOpen) {
+          expandedTimelineIds.add(anim.id);
+        } else {
+          expandedTimelineIds.delete(anim.id);
+        }
+      });
+    }
+  }
+
+  return { group, row };
 }
 
 function patchListItem(anim, item) {
@@ -331,6 +426,39 @@ function patchListItem(anim, item) {
     if (dot.className !== `dot ${cls}`) dot.className = `dot ${cls}`;
     dot.dataset.tooltip = `State: ${label}`;
   }
+}
+
+// ── Generate GSAP code snippet ────────────────────────────────────────────────
+function generateAnimCode(anim, allAnimations) {
+  const fmt = (v) => typeof v === 'string' ? `'${v}'` : String(v);
+  const fmtVars = (entries, indent = '  ') =>
+    entries.map(([k, v]) => `${indent}${k}: ${fmt(v)}`).join(',\n');
+
+  if (anim.type === 'tween') {
+    const target = anim.targetSelector ? `'${anim.targetSelector}'` : '/* element */';
+    const entries = Object.entries(anim.vars || {});
+    if (!entries.length) return `gsap.to(${target}, { duration: ${anim.duration.toFixed(2)} });`;
+    return `gsap.to(${target}, {\n${fmtVars(entries)}\n});`;
+  }
+
+  if (anim.type === 'timeline') {
+    const children = allAnimations.filter((a) => a.parentId === anim.id);
+    const tlOptions = [];
+    if (typeof anim.repeat === 'number' && anim.repeat !== 0) tlOptions.push(`  repeat: ${anim.repeat}`);
+    if (anim.vars?.ease) tlOptions.push(`  defaults: { ease: '${anim.vars.ease}' }`);
+    let code = `const tl = gsap.timeline(${tlOptions.length ? `{\n${tlOptions.join(',\n')}\n}` : ''});\n`;
+    children.forEach((child) => {
+      const target = child.targetSelector ? `'${child.targetSelector}'` : '/* element */';
+      const entries = Object.entries(child.vars || {});
+      if (!entries.length) {
+        code += `\ntl.to(${target}, { duration: ${child.duration.toFixed(2)} });`;
+      } else {
+        code += `\ntl.to(${target}, {\n${fmtVars(entries)}\n});`;
+      }
+    });
+    return code;
+  }
+  return '';
 }
 
 // ── Animation detail pane ─────────────────────────────────────────────────────
@@ -396,10 +524,10 @@ function renderAnimDetail(id) {
 
     <div class="detail-playback">
       <div class="detail-playback-btns">
-        <button class="btn btn-icon anim-btn" data-cmd="anim_restart" data-id="${escapeAttr(anim.id)}" data-tooltip="Restart from the beginning.">⏮</button>
-        <button class="btn btn-icon anim-btn" data-cmd="anim_play"    data-id="${escapeAttr(anim.id)}" data-tooltip="Play / resume.">▶</button>
-        <button class="btn btn-icon anim-btn" data-cmd="anim_pause"   data-id="${escapeAttr(anim.id)}" data-tooltip="Pause at current position.">⏸</button>
-        <button class="btn btn-icon anim-btn" data-cmd="anim_reverse" data-id="${escapeAttr(anim.id)}" data-tooltip="Reverse from current position.">◀</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_restart" data-id="${escapeAttr(anim.id)}" data-tooltip="Restart from the beginning.">${icon('skipBack')}</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_play"    data-id="${escapeAttr(anim.id)}" data-tooltip="Play / resume.">${icon('play')}</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_pause"   data-id="${escapeAttr(anim.id)}" data-tooltip="Pause at current position.">${icon('pause')}</button>
+        <button class="btn btn-icon anim-btn" data-cmd="anim_reverse" data-id="${escapeAttr(anim.id)}" data-tooltip="Reverse from current position.">${icon('rotateCcw')}</button>
         <span class="detail-progress-pct" id="detail-scrub-pct">${progressPct}%</span>
       </div>
       <input type="range" class="scrub-lg" id="detail-anim-scrub"
@@ -468,6 +596,21 @@ function renderAnimDetail(id) {
     </div>`;
   }
 
+  const code = generateAnimCode(anim, lastData.animations);
+  if (code) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-header">${icon('code', 12)} Generated Code</div>
+      <div class="detail-code-block">
+        <div class="detail-code-toolbar">
+          <span class="detail-code-lang">JavaScript</span>
+          <button class="btn btn-sm" id="detail-copy-code" data-tooltip="Copy this code to clipboard.">${icon('copy', 12)} Copy</button>
+        </div>
+        <pre class="detail-code-pre">${escapeHtml(code)}</pre>
+      </div>
+    </div>`;
+  }
+
   container.innerHTML = html;
 
   container.querySelector('#detail-edit-btn')?.addEventListener('click', () => {
@@ -508,6 +651,12 @@ function renderAnimDetail(id) {
       }
     });
   });
+
+  if (code) {
+    container.querySelector('#detail-copy-code')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(code);
+    });
+  }
 }
 
 function patchAnimDetail() {
@@ -811,10 +960,10 @@ function renderLinter(data) {
   results.forEach((r) => {
     const item = document.createElement('div');
     item.className = `lint-item lint-${r.severity}`;
-    const icon = r.severity === 'error' ? '✕' : r.severity === 'warning' ? '⚠' : '💡';
+    const lintIcon = r.severity === 'error' ? '✕' : r.severity === 'warning' ? '⚠' : '💡';
     item.innerHTML = `
       <div class="lint-item-header">
-        <span class="lint-icon">${icon}</span>
+        <span class="lint-icon">${lintIcon}</span>
         <strong>${escapeHtml(r.title)}</strong>
       </div>
       <p class="lint-desc">${escapeHtml(r.description)}</p>
@@ -865,6 +1014,19 @@ function renderOverrides() {
     });
   });
 }
+
+// ── Collapse / Expand all timeline groups ─────────────────────────────────────
+document.getElementById('btn-collapse-all').addEventListener('click', () => {
+  document.querySelectorAll('#anim-list .list-item-children').forEach((el) => { el.style.display = 'none'; });
+  document.querySelectorAll('#anim-list .list-item-chevron').forEach((el) => { el.classList.remove('open'); });
+  expandedTimelineIds.clear();
+});
+
+document.getElementById('btn-expand-all').addEventListener('click', () => {
+  document.querySelectorAll('#anim-list .list-item-children').forEach((el) => { el.style.display = ''; });
+  document.querySelectorAll('#anim-list .list-item-chevron').forEach((el) => { el.classList.add('open'); });
+  lastData?.animations.filter((a) => a.type === 'timeline').forEach((a) => expandedTimelineIds.add(a.id));
+});
 
 // ── Global playback controls ──────────────────────────────────────────────────
 document.getElementById('btn-play-all').addEventListener('click',    () => sendCommand({ command: 'play_all' }));
