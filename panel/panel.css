@@ -314,8 +314,9 @@ body {
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s;
   line-height: 1;
+  text-decoration: none;
 }
 
 .btn:hover {
