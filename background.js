@@ -21,7 +21,13 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 
   port.onDisconnect.addListener(() => {
-    if (tabId) devtoolsPorts.delete(tabId);
+    if (tabId) {
+      devtoolsPorts.delete(tabId);
+      // Tell the content script to stop polling so the interval doesn't
+      // run indefinitely after the DevTools panel is closed.
+      chrome.tabs.sendMessage(tabId, { __gsap_inspector_cmd__: true, command: 'stop_inspection' })
+        .catch(() => {});
+    }
   });
 });
 

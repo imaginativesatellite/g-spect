@@ -1,14 +1,22 @@
 // gsap-linter.js — Static analysis rules for GSAP usage patterns.
 // Exported as an ES module; consumed by panel.js.
 
+// ── Configurable thresholds ────────────────────────────────────────────────
+const THRESHOLDS = {
+  standaloneTweenCount: 5,    // tip to consolidate into a timeline
+  staggerSeconds:       0.3,  // tip when stagger exceeds this
+  contextAnimCount:     10,   // tip to use gsap.context() when exceeded
+  infiniteLeakCount:    1,    // warn on infinite loops outside context
+};
+
 /**
  * Run all linting rules against a snapshot of GSAP inspection data.
  * @param {object} data - The payload from injected.js inspection_data message.
- * @returns {Array<{severity: string, rule: string, title: string, description: string, fix: string}>}
+ * @returns {Array<{severity, rule, title, description, fix}>}
  */
 export function runLinter(data) {
   const results = [];
-  const { version, isGSAP3, animations = [], scrollTriggers = [], plugins = [] } = data;
+  const { isGSAP3, animations = [], scrollTriggers = [], plugins = [], hasLegacyGSAP = false } = data;
 
   function add(severity, rule, title, description, fix) {
     results.push({ severity, rule, title, description, fix });
@@ -28,7 +36,7 @@ export function runLinter(data) {
     );
   }
 
-  // ── Rule 2: Plugin referenced but not detected as registered ──────────────
+  // ── Rule 2: ScrollTrigger used but not detected as registered ─────────────
   const scrollLinkedExists =
     animations.some((a) => a.isScrollLinked) || scrollTriggers.length > 0;
   if (scrollLinkedExists && !plugins.includes('ScrollTrigger')) {
@@ -42,25 +50,19 @@ export function runLinter(data) {
   }
 
   // ── Rule 3: GSAP 2 legacy API mixed with GSAP 3 ───────────────────────────
-  if (isGSAP3) {
-    const hasLegacy =
-      typeof window !== 'undefined' &&
-      (window.TweenMax ||
-        window.TweenLite ||
-        window.TimelineMax ||
-        window.TimelineLite);
-    if (hasLegacy) {
-      add(
-        'error',
-        'gsap2-api-on-gsap3',
-        'GSAP 2 API (TweenMax/TweenLite) detected on a GSAP 3 site',
-        'TweenMax, TweenLite, TimelineMax, and TimelineLite are GSAP 2 classes. While GSAP 3 includes a compatibility layer, mixing APIs causes unpredictable behavior and performance issues.',
-        'Replace all TweenMax.to() with gsap.to(), TweenMax.fromTo() with gsap.fromTo(), etc.'
-      );
-    }
+  // hasLegacyGSAP is detected in the page's MAIN world and passed in the payload.
+  if (isGSAP3 && hasLegacyGSAP) {
+    add(
+      'error',
+      'gsap2-api-on-gsap3',
+      'GSAP 2 API (TweenMax/TweenLite) detected on a GSAP 3 site',
+      'TweenMax, TweenLite, TimelineMax, and TimelineLite are GSAP 2 classes. While GSAP 3 includes a compatibility layer, mixing APIs causes unpredictable behavior and performance issues.',
+      'Replace all TweenMax.to() with gsap.to(), TweenMax.fromTo() with gsap.fromTo(), etc.'
+    );
   }
 
   // ── Rule 4: Scrubbed ScrollTrigger without invalidateOnRefresh ────────────
+  // Check for !invalidateOnRefresh to catch both false and undefined (unset).
   const stWithoutInvalidate = scrollTriggers.filter(
     (st) => !st.invalidateOnRefresh && st.scrub !== false
   );
@@ -78,7 +80,7 @@ export function runLinter(data) {
   const standaloneTweens = animations.filter(
     (a) => a.type === 'tween' && a.depth === 1
   );
-  if (standaloneTweens.length > 5) {
+  if (standaloneTweens.length > THRESHOLDS.standaloneTweenCount) {
     add(
       'tip',
       'prefer-timeline',
@@ -102,7 +104,7 @@ export function runLinter(data) {
     );
   }
 
-  // ── Rule 7: Non-scrubbed ScrollTrigger still using default toggleActions ──
+  // ── Rule 7: Non-scrubbed ScrollTrigger using default toggleActions ─────────
   const stMissingToggle = scrollTriggers.filter(
     (st) => !st.scrub && st.toggleActions === 'play none none none'
   );
@@ -117,11 +119,13 @@ export function runLinter(data) {
   }
 
   // ── Rule 8: Unusually large stagger value ─────────────────────────────────
-  const heavyStagger = animations.filter(
-    (a) => a.vars && a.vars.stagger && a.targetSelector
-  );
-  heavyStagger.forEach((a) => {
-    if (typeof a.vars.stagger === 'number' && a.vars.stagger > 0.3) {
+  animations.forEach((a) => {
+    if (
+      a.vars &&
+      typeof a.vars.stagger === 'number' &&
+      a.vars.stagger > THRESHOLDS.staggerSeconds &&
+      a.targetSelector
+    ) {
       add(
         'tip',
         'large-stagger',
@@ -133,12 +137,8 @@ export function runLinter(data) {
   });
 
   // ── Rule 9: Mixing opacity and autoAlpha ──────────────────────────────────
-  const opacityTweens = animations.filter(
-    (a) => a.vars && a.vars.opacity !== undefined && a.vars.autoAlpha === undefined
-  );
-  const autoAlphaTweens = animations.filter(
-    (a) => a.vars && a.vars.autoAlpha !== undefined
-  );
+  const opacityTweens   = animations.filter((a) => a.vars && a.vars.opacity    !== undefined && a.vars.autoAlpha === undefined);
+  const autoAlphaTweens = animations.filter((a) => a.vars && a.vars.autoAlpha  !== undefined);
   if (opacityTweens.length > 0 && autoAlphaTweens.length > 0) {
     add(
       'tip',
@@ -150,13 +150,27 @@ export function runLinter(data) {
   }
 
   // ── Rule 10: No gsap.context() with many animations ──────────────────────
-  if (animations.length > 10 && !data.usesContext) {
+  if (animations.length > THRESHOLDS.contextAnimCount && !data.usesContext) {
     add(
       'tip',
       'use-gsap-context',
       'Consider using gsap.context() for cleanup',
       'With many animations on the page, using gsap.context() makes it easy to kill all animations within a specific container with a single .revert() call. This is especially important in React, Vue, or any component-based framework where components unmount.',
       'Wrap your animations: const ctx = gsap.context(() => { /* all your gsap code */ }, containerRef); then call ctx.revert() on cleanup.'
+    );
+  }
+
+  // ── Rule 11: Infinite-repeat animations outside gsap.context() ───────────
+  const infiniteOutsideContext = animations.filter(
+    (a) => a.repeat === -1 && !a.isScrollLinked
+  );
+  if (infiniteOutsideContext.length >= THRESHOLDS.infiniteLeakCount && !data.usesContext) {
+    add(
+      'warning',
+      'infinite-loop-memory-leak',
+      `${infiniteOutsideContext.length} infinite-loop animation(s) without gsap.context()`,
+      'Animations with repeat: -1 run forever. Without gsap.context(), they will continue after the component that created them unmounts — a common memory leak in React, Vue, Next.js, and other SPA frameworks.',
+      'Wrap your animations in gsap.context(() => { ... }, containerRef) and call ctx.revert() on component cleanup/unmount to automatically kill all animations.'
     );
   }
 

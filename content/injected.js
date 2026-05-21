@@ -14,15 +14,22 @@
     handleCommand(e.data);
   });
 
+  // ── Monotonic ID counter — no collision risk ───────────────────────────────
+  let _idCounter = 0;
+  function nextId() { return String(++_idCounter); }
+
+  // ── Poll interval ref for cleanup on panel close ───────────────────────────
+  let _pollInterval = null;
+
   // ── Wait for GSAP to be available ──────────────────────────────────────────
   let attempts = 0;
-  const waitForGSAP = setInterval(() => {
+  const waitInterval = setInterval(() => {
     attempts++;
     if (window.gsap) {
-      clearInterval(waitForGSAP);
+      clearInterval(waitInterval);
       init();
     } else if (attempts > 100) {
-      clearInterval(waitForGSAP);
+      clearInterval(waitInterval);
       send({ type: 'gsap_not_found' });
     }
   }, 50);
@@ -30,7 +37,7 @@
   // ── Initialise once GSAP is present ────────────────────────────────────────
   function init() {
     sendInspectionData();
-    setInterval(sendInspectionData, 500);
+    _pollInterval = setInterval(sendInspectionData, 500);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -54,6 +61,19 @@
         window.Webflow.find('[data-wf-ix-interact]') &&
         window.Webflow.find('[data-wf-ix-interact]').length)
     );
+  }
+
+  function hasLegacyGSAP() {
+    return !!(window.TweenMax || window.TweenLite || window.TimelineMax || window.TimelineLite);
+  }
+
+  function detectUsesContext() {
+    if (!window.gsap || !window.gsap.globalTimeline) return false;
+    try {
+      const all = window.gsap.globalTimeline.getChildren(true, true, true) || [];
+      return all.some((a) => a._ctx != null);
+    } catch (e) {}
+    return false;
   }
 
   function getLoadedPlugins() {
@@ -106,12 +126,34 @@
     return safe;
   }
 
+  // Build a human-readable CSS selector by walking up the DOM (max 4 levels).
   function selectorFromElement(el) {
     if (!(el instanceof Element)) return '';
     if (el.id) return '#' + el.id;
-    const className = String(el.className || '').trim();
-    if (className) return '.' + className.split(/\s+/)[0];
-    return el.tagName ? el.tagName.toLowerCase() : 'element';
+    const parts = [];
+    let node = el;
+    let depth = 0;
+    while (node && node !== document.body && depth < 4) {
+      if (node.id) {
+        parts.unshift('#' + node.id);
+        break;
+      }
+      let part = node.tagName.toLowerCase();
+      const cls = String(node.className || '').trim().split(/\s+/).filter(Boolean)[0];
+      if (cls) {
+        part += '.' + cls;
+      } else {
+        const parent = node.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter((c) => c.tagName === node.tagName);
+          if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(node) + 1})`;
+        }
+      }
+      parts.unshift(part);
+      node = node.parentElement;
+      depth++;
+    }
+    return parts.join(' > ') || el.tagName.toLowerCase();
   }
 
   // ── Walk globalTimeline and collect animations ─────────────────────────────
@@ -133,41 +175,49 @@
 
       children.forEach((child) => {
         if (!child._gsapInspectorId) {
-          child._gsapInspectorId = Math.random().toString(36).slice(2);
+          child._gsapInspectorId = nextId();
         }
 
         const isTimeline =
           typeof child.getChildren === 'function' || Array.isArray(child._children);
 
-        const target = child._targets && child._targets[0];
+        // Collect ALL element targets, not just the first.
+        const targets = child._targets || [];
+        const elementTargets = targets.filter((t) => t instanceof Element);
         let targetSelector = '';
-        if (target instanceof Element) {
-          targetSelector = selectorFromElement(target);
-        } else if (typeof target === 'object' && target !== null) {
+        if (elementTargets.length === 1) {
+          targetSelector = selectorFromElement(elementTargets[0]);
+        } else if (elementTargets.length > 1) {
+          const first = selectorFromElement(elementTargets[0]);
+          targetSelector = first
+            ? `${first} +${elementTargets.length - 1}`
+            : `${elementTargets.length} elements`;
+        } else if (targets.length > 0) {
           targetSelector = 'object';
         }
 
         let progress = 0, paused = false, reversed = false, duration = 0;
-        try { progress  = typeof child.progress  === 'function' ? child.progress()  : 0;     } catch (e) {}
-        try { paused    = typeof child.paused     === 'function' ? child.paused()    : false;  } catch (e) {}
-        try { reversed  = typeof child.reversed   === 'function' ? child.reversed()  : false;  } catch (e) {}
-        try { duration  = typeof child.duration   === 'function' ? child.duration()  : 0;     } catch (e) {}
+        try { progress = typeof child.progress  === 'function' ? child.progress()  : 0;    } catch (e) {}
+        try { paused   = typeof child.paused    === 'function' ? child.paused()    : false; } catch (e) {}
+        try { reversed = typeof child.reversed  === 'function' ? child.reversed()  : false; } catch (e) {}
+        try { duration = typeof child.duration  === 'function' ? child.duration()  : 0;    } catch (e) {}
 
         results.push({
-          id: child._gsapInspectorId,
-          parentId: parentId || null,
-          type: isTimeline ? 'timeline' : 'tween',
+          id:             child._gsapInspectorId,
+          parentId:       parentId || null,
+          type:           isTimeline ? 'timeline' : 'tween',
           depth,
           targetSelector,
+          targetCount:    elementTargets.length || targets.length,
           duration,
-          delay: child._delay || 0,
-          startTime: child._start || 0,
+          delay:          child._delay || 0,
+          startTime:      child._start || 0,
           progress,
           paused,
-          vars: sanitizeVars(child.vars || {}),
-          timeScale: child._ts !== undefined ? child._ts : 1,
-          repeat: child._repeat || 0,
-          yoyo: child._yoyo || false,
+          vars:           sanitizeVars(child.vars || {}),
+          timeScale:      child._ts !== undefined ? child._ts : 1,
+          repeat:         child._repeat || 0,
+          yoyo:           child._yoyo || false,
           isScrollLinked: !!(child.scrollTrigger),
           reversed,
         });
@@ -185,22 +235,23 @@
     if (!window.ScrollTrigger || typeof window.ScrollTrigger.getAll !== 'function') return [];
     return window.ScrollTrigger.getAll().map((st) => {
       if (!st._gsapInspectorId) {
-        st._gsapInspectorId = Math.random().toString(36).slice(2);
+        st._gsapInspectorId = nextId();
       }
       return {
-        id: st._gsapInspectorId,
-        triggerSelector: st.trigger instanceof Element ? selectorFromElement(st.trigger) : '',
-        start: (st.vars && st.vars.start) || 'top bottom',
-        end: (st.vars && st.vars.end) || 'bottom top',
-        scrub: st.vars && st.vars.scrub !== undefined ? st.vars.scrub : false,
-        pin: !!(st.vars && st.vars.pin),
-        markers: !!(st.vars && st.vars.markers),
-        progress: st.progress || 0,
-        isActive: st.isActive || false,
-        snap: st.vars && st.vars.snap ? st.vars.snap : false,
-        toggleActions: (st.vars && st.vars.toggleActions) || 'play none none none',
+        id:                 st._gsapInspectorId,
+        triggerSelector:    st.trigger instanceof Element ? selectorFromElement(st.trigger) : '',
+        start:              (st.vars && st.vars.start)          || 'top bottom',
+        end:                (st.vars && st.vars.end)            || 'bottom top',
+        scrub:              st.vars && st.vars.scrub !== undefined ? st.vars.scrub : false,
+        pin:                !!(st.vars && st.vars.pin),
+        markers:            !!(st.vars && st.vars.markers),
+        progress:           st.progress || 0,
+        isActive:           st.isActive || false,
+        snap:               st.vars && st.vars.snap ? st.vars.snap : false,
+        toggleActions:      (st.vars && st.vars.toggleActions) || 'play none none none',
         invalidateOnRefresh: !!(st.vars && st.vars.invalidateOnRefresh),
-        linkedAnimId: (st.animation && st.animation._gsapInspectorId) ? st.animation._gsapInspectorId : null,
+        linkedAnimId:       (st.animation && st.animation._gsapInspectorId)
+          ? st.animation._gsapInspectorId : null,
       };
     });
   }
@@ -221,16 +272,17 @@
     send({
       type: 'inspection_data',
       payload: {
-        version: getGSAPVersion(),
-        isGSAP3: !!(gsap.version && parseInt(gsap.version, 10) >= 3),
-        isWebflow: isWebflow(),
-        hasIx2: hasIx2(),
-        plugins: getLoadedPlugins(),
-        animations: getAnimations(),
+        version:        getGSAPVersion(),
+        isGSAP3:        !!(gsap.version && parseInt(gsap.version, 10) >= 3),
+        isWebflow:      isWebflow(),
+        hasIx2:         hasIx2(),
+        hasLegacyGSAP:  hasLegacyGSAP(),
+        plugins:        getLoadedPlugins(),
+        animations:     getAnimations(),
         scrollTriggers: getScrollTriggers(),
         globalPaused,
         globalTimeScale,
-        usesContext: false,
+        usesContext:    detectUsesContext(),
       },
     });
   }
@@ -244,8 +296,6 @@
   }
 
   // ── Reverse element inspector ──────────────────────────────────────────────
-  // When active, mouseover events on page elements are checked against all
-  // GSAP animations and ScrollTriggers. Matches are sent back to the panel.
   let reverseInspectorActive = false;
   let reverseDebounce = null;
 
@@ -259,7 +309,6 @@
       const animIds = [];
       const stIds   = [];
 
-      // Check animations
       if (window.gsap && window.gsap.globalTimeline) {
         let all = [];
         try { all = window.gsap.globalTimeline.getChildren(true, true, true) || []; } catch (_) {}
@@ -270,7 +319,6 @@
         });
       }
 
-      // Check ScrollTriggers
       if (window.ScrollTrigger && typeof window.ScrollTrigger.getAll === 'function') {
         window.ScrollTrigger.getAll().forEach((st) => {
           if (st.trigger === el && st._gsapInspectorId) {
@@ -284,10 +332,17 @@
       } else {
         send({ type: 'reverse_unhighlight' });
       }
-    }, 80); // small debounce to avoid spamming on fast mouse moves
+    }, 80);
   }
 
-  document.addEventListener('mouseover', onPageMouseover, { passive: true });
+  // Cancel any pending highlight when the mouse leaves the document.
+  function onPageMouseleave() {
+    if (!reverseInspectorActive) return;
+    clearTimeout(reverseDebounce);
+  }
+
+  document.addEventListener('mouseover',  onPageMouseover,  { passive: true });
+  document.addEventListener('mouseleave', onPageMouseleave, { passive: true });
 
   // ── Element highlight overlay ──────────────────────────────────────────────
   function highlightEl(el, label) {
@@ -305,9 +360,9 @@
       left:          rect.left   + 'px',
       width:         rect.width  + 'px',
       height:        rect.height + 'px',
-      outline:       '2px solid #3B82F6',
+      outline:       '2px solid #10B981',
       outlineOffset: '1px',
-      background:    'rgba(59,130,246,0.08)',
+      background:    'rgba(16,185,129,0.08)',
       pointerEvents: 'none',
       zIndex:        '2147483647',
       boxSizing:     'border-box',
@@ -316,18 +371,18 @@
     if (label) {
       const badge = document.createElement('div');
       Object.assign(badge.style, {
-        position:     'absolute',
-        top:          '-22px',
-        left:         '0',
-        background:   '#3B82F6',
-        color:        '#fff',
-        fontSize:     '10px',
-        fontFamily:   'system-ui, sans-serif',
-        padding:      '2px 6px',
-        borderRadius: '3px',
-        whiteSpace:   'nowrap',
-        pointerEvents:'none',
-        lineHeight:   '1.5',
+        position:      'absolute',
+        top:           '-22px',
+        left:          '0',
+        background:    '#10B981',
+        color:         '#fff',
+        fontSize:      '10px',
+        fontFamily:    'system-ui, sans-serif',
+        padding:       '2px 6px',
+        borderRadius:  '3px',
+        whiteSpace:    'nowrap',
+        pointerEvents: 'none',
+        lineHeight:    '1.5',
       });
       badge.textContent = label;
       overlay.appendChild(badge);
@@ -367,12 +422,38 @@
         if (window.gsap && window.gsap.globalTimeline) window.gsap.globalTimeline.progress(cmd.value);
         break;
 
-      // Preserve inspector IDs and insertion order when toggling all markers.
-      // Kill all first, then recreate in the same order with saved IDs.
+      // Panel closed: stop polling to avoid orphan intervals.
+      case 'stop_inspection':
+        clearInterval(_pollInterval);
+        _pollInterval = null;
+        break;
+
+      // Manual rescan from panel when GSAP was not detected on initial load.
+      case 'rescan': {
+        if (window.gsap) {
+          // GSAP is now available — start inspection if not already running.
+          if (!_pollInterval) init();
+          else sendInspectionData();
+        } else {
+          let scanAttempts = 0;
+          const scanInterval = setInterval(() => {
+            scanAttempts++;
+            if (window.gsap) {
+              clearInterval(scanInterval);
+              if (!_pollInterval) init();
+              else sendInspectionData();
+            } else if (scanAttempts > 100) {
+              clearInterval(scanInterval);
+              send({ type: 'gsap_not_found' });
+            }
+          }, 50);
+        }
+        break;
+      }
+
       case 'toggle_markers_all': {
         if (!window.ScrollTrigger) break;
         const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
-        // Snapshot everything before killing
         const snapshots = all.map((st) => ({
           savedId:   st._gsapInspectorId,
           animation: st.animation,
@@ -383,14 +464,12 @@
           const newSt = animation
             ? window.ScrollTrigger.create(Object.assign({}, vars, { animation }))
             : window.ScrollTrigger.create(vars);
-          // Re-stamp the same ID so panel order is stable
           if (newSt && savedId) newSt._gsapInspectorId = savedId;
         });
         if (window.ScrollTrigger.refresh) window.ScrollTrigger.refresh();
         break;
       }
 
-      // Same ID preservation for a single trigger.
       case 'toggle_markers_one': {
         if (!window.ScrollTrigger) break;
         const all = window.ScrollTrigger.getAll ? window.ScrollTrigger.getAll() : [];
@@ -430,7 +509,8 @@
       }
       case 'anim_set_progress': {
         const a = findAnim(cmd.id);
-        if (a && typeof a.progress === 'function') a.progress(cmd.value);
+        // Clamp to 0–1 — GSAP accepts out-of-range values but the scrub slider shouldn't send them.
+        if (a && typeof a.progress === 'function') a.progress(Math.max(0, Math.min(1, cmd.value)));
         break;
       }
       case 'anim_set_timescale': {
@@ -477,7 +557,6 @@
         break;
       }
 
-      // Element inspector: highlight the target elements of an animation
       case 'highlight_element': {
         clearHighlight();
         const anim = findAnim(cmd.id);
@@ -489,7 +568,6 @@
         break;
       }
 
-      // Element inspector: highlight the trigger element of a ScrollTrigger
       case 'highlight_st': {
         clearHighlight();
         if (window.ScrollTrigger) {
@@ -521,7 +599,12 @@
     if (e.data && e.data.__gsap_inspector_overrides__) {
       const { code } = e.data;
       if (code) {
-        try { new Function(code)(); } catch (err) { console.warn('[GSAP Inspector] Override error:', err); } // eslint-disable-line no-new-func
+        try {
+          // eslint-disable-next-line no-new-func
+          new Function(code)();
+        } catch (err) {
+          console.warn('[G-spect] Override error:', err);
+        }
       }
     }
   });

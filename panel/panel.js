@@ -79,17 +79,12 @@ document.addEventListener('mouseout', (e) => {
 function positionTip(host) {
   const rect = host.getBoundingClientRect();
   const tw = tip.offsetWidth, th = tip.offsetHeight;
-  const vw = window.innerWidth,  vh = window.innerHeight;
+  const vw = window.innerWidth, vh = window.innerHeight;
   const M = 8;
-  let top  = rect.top - th - M;
-  let left = rect.width > 200 ? rect.left + M : rect.left + rect.width / 2 - tw / 2;
-  if (top < M) top = rect.bottom + M;
-  if (left < M) left = M;
-  if (left + tw > vw - M) left = vw - tw - M;
-  if (top < M) top = M;
-  if (top + th > vh - M) top = vh - th - M;
-  tip.style.top  = top  + 'px';
-  tip.style.left = left + 'px';
+  const idealLeft = rect.width > 200 ? rect.left + M : rect.left + rect.width / 2 - tw / 2;
+  const top = rect.top - th - M >= M ? rect.top - th - M : rect.bottom + M;
+  tip.style.top  = Math.max(M, Math.min(top,      vh - th - M)) + 'px';
+  tip.style.left = Math.max(M, Math.min(idealLeft, vw - tw - M)) + 'px';
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
@@ -200,6 +195,10 @@ function showNotFound() {
   document.getElementById('gsap-not-found').style.display = '';
   document.getElementById('overview-content').style.display = 'none';
 }
+
+document.getElementById('btn-rescan')?.addEventListener('click', () => {
+  sendCommand({ command: 'rescan' });
+});
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
 function renderOverview(data) {
@@ -479,12 +478,14 @@ function generateAnimCode(anim, allAnimations) {
     if (anim.vars?.ease) tlOptions.push(`  defaults: { ease: '${anim.vars.ease}' }`);
     let code = `const tl = gsap.timeline(${tlOptions.length ? `{\n${tlOptions.join(',\n')}\n}` : ''});\n`;
     children.forEach((child) => {
-      const target = child.targetSelector ? `'${child.targetSelector}'` : '/* element */';
+      const target  = child.targetSelector ? `'${child.targetSelector}'` : '/* element */';
       const entries = Object.entries(child.vars || {});
+      // Absolute position parameter — matches child._start in the timeline.
+      const pos     = child.startTime > 0 ? `, ${child.startTime.toFixed(2)}` : '';
       if (!entries.length) {
-        code += `\ntl.to(${target}, { duration: ${child.duration.toFixed(2)} });`;
+        code += `\ntl.to(${target}, { duration: ${child.duration.toFixed(2)} }${pos});`;
       } else {
-        code += `\ntl.to(${target}, {\n${fmtVars(entries)}\n});`;
+        code += `\ntl.to(${target}, {\n${fmtVars(entries)}\n}${pos});`;
       }
     });
     return code;
@@ -553,8 +554,8 @@ function renderAnimDetail(id) {
         <span class="stat-value" id="detail-progress-val">${progressPct}%</span>
       </div>
       <div class="stat">
-        <span class="stat-label" data-tooltip="Total playback time of this animation in seconds.">Duration</span>
-        <span class="stat-value">${anim.duration.toFixed(2)}s</span>
+        <span class="stat-label" data-tooltip="Total playback time in seconds. Matches the 'duration' value you pass to gsap.to().">Duration (s)</span>
+        <span class="stat-value">${anim.duration.toFixed(2)}</span>
       </div>
       <div class="stat">
         <span class="stat-label" data-tooltip="Easing function controlling acceleration. power2.out = decelerates, elastic = bounces, none = linear.">Ease</span>
@@ -562,13 +563,13 @@ function renderAnimDetail(id) {
       </div>
       ${typeof anim.repeat === 'number' && anim.repeat !== 0 ? `
       <div class="stat">
-        <span class="stat-label" data-tooltip="Number of times this animation repeats. -1 means infinite loop.">Repeat</span>
-        <span class="stat-value">${anim.repeat === -1 ? '∞' : anim.repeat}</span>
+        <span class="stat-label" data-tooltip="Number of times this animation repeats. -1 = infinite loop, same value you pass to gsap.to() as repeat.">Repeat</span>
+        <span class="stat-value">${anim.repeat === -1 ? '∞ (−1)' : anim.repeat}</span>
       </div>` : ''}
       ${typeof anim.delay === 'number' && anim.delay > 0 ? `
       <div class="stat">
-        <span class="stat-label" data-tooltip="Delay before this animation starts, in seconds.">Delay</span>
-        <span class="stat-value">${anim.delay.toFixed(2)}s</span>
+        <span class="stat-label" data-tooltip="Seconds before this animation starts. Matches the 'delay' value in your gsap.to() call.">Delay (s)</span>
+        <span class="stat-value">${anim.delay.toFixed(2)}</span>
       </div>` : ''}
     </div>
 
@@ -643,6 +644,7 @@ function renderAnimDetail(id) {
                 <span class="anim-type-tag tween" style="font-size:8px">T</span>
                 <span class="detail-child-target">${escapeHtml(child.targetSelector || 'anonymous')}</span>
                 <span class="list-item-meta" style="margin-left:auto;flex-shrink:0">${child.duration.toFixed(2)}s</span>
+                <span class="list-item-meta" style="flex-shrink:0;color:var(--text-muted);font-size:10px" data-tooltip="Start time within the parent timeline (seconds from timeline start).">@${child.startTime.toFixed(2)}</span>
               </div>
               ${childProps.length ? `<div class="detail-child-props">${escapeHtml(childProps.join(', '))}</div>` : ''}
             </div>
@@ -802,15 +804,17 @@ function buildMiniTimeline(container, anim, children, idPrefix = '') {
     bar.setAttribute('opacity', '0.85');
     g.appendChild(bar);
 
-    // Label
-    const label = document.createElementNS(ns, 'text');
-    label.setAttribute('x', String(x1 + 4));
-    label.setAttribute('y', String(y + ROW_H - 4));
-    label.setAttribute('font-size', '9');
-    label.setAttribute('fill', 'var(--text-primary, #e2e8f0)');
-    label.setAttribute('pointer-events', 'none');
-    label.textContent = child.targetSelector || child.type || '?';
-    g.appendChild(label);
+    // Only draw a label if the bar is wide enough to contain text.
+    if (bw > 30) {
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', String(x1 + 4));
+      label.setAttribute('y', String(y + ROW_H - 4));
+      label.setAttribute('font-size', '9');
+      label.setAttribute('fill', 'var(--text-primary, #e2e8f0)');
+      label.setAttribute('pointer-events', 'none');
+      label.textContent = child.targetSelector || child.type || '?';
+      g.appendChild(label);
+    }
   });
 
   // Time axis
@@ -823,6 +827,7 @@ function buildMiniTimeline(container, anim, children, idPrefix = '') {
   g.appendChild(axis);
 
   const tickCount = 5;
+  const showTickLabels = W >= 120;
   for (let i = 0; i <= tickCount; i++) {
     const x = (i / tickCount) * W;
     const tick = document.createElementNS(ns, 'line');
@@ -832,14 +837,17 @@ function buildMiniTimeline(container, anim, children, idPrefix = '') {
     tick.setAttribute('stroke-width', '1');
     g.appendChild(tick);
 
-    const lbl = document.createElementNS(ns, 'text');
-    lbl.setAttribute('x', String(x));
-    lbl.setAttribute('y', String(axisY + TICK_H + 10));
-    lbl.setAttribute('font-size', '8');
-    lbl.setAttribute('fill', 'var(--text-muted, #6b7280)');
-    lbl.setAttribute('text-anchor', 'middle');
-    lbl.textContent = ((i / tickCount) * totalDur).toFixed(2) + 's';
-    g.appendChild(lbl);
+    if (showTickLabels) {
+      const lbl = document.createElementNS(ns, 'text');
+      lbl.setAttribute('x', String(x));
+      lbl.setAttribute('y', String(axisY + TICK_H + 10));
+      lbl.setAttribute('font-size', '8');
+      lbl.setAttribute('fill', 'var(--text-muted, #6b7280)');
+      lbl.setAttribute('text-anchor', 'middle');
+      // Raw seconds value — matches what you'd pass to gsap.to() duration.
+      lbl.textContent = ((i / tickCount) * totalDur).toFixed(2);
+      g.appendChild(lbl);
+    }
   }
 
   // Playhead
@@ -993,11 +1001,12 @@ function renderStDetail(id) {
   const st = lastData?.scrollTriggers.find((s) => s.id === id);
   if (!st) { container.innerHTML = ''; return; }
 
-  const linkedAnim   = st.linkedAnimId
+  const linkedAnim  = st.linkedAnimId
     ? lastData.animations.find((a) => a.id === st.linkedAnimId)
     : null;
-  const progressPct  = Math.round(st.progress * 100);
-  const scrubLabel   = st.scrub === true ? 'yes' : st.scrub === false ? 'no' : `${st.scrub}s lag`;
+  const progressPct = Math.round(st.progress * 100);
+  // scrub:0 is falsy and means "off" — same as false.
+  const scrubLabel  = !st.scrub ? 'no' : st.scrub === true ? 'yes' : `${st.scrub}s lag`;
 
   let html = `
     <div class="detail-header">
@@ -1026,7 +1035,7 @@ function renderStDetail(id) {
         <span class="stat-value">${escapeHtml(st.end)}</span>
       </div>
       <div class="stat">
-        <span class="stat-label" data-tooltip="Scrub ties animation progress directly to scroll position so dragging the scrollbar drags the animation. Without scrub, the animation plays when the trigger fires.">Scrub</span>
+        <span class="stat-label" data-tooltip="scrub: true = progress tied 1:1 to scroll. A number = seconds of smoothing lag. false/0 = one-shot trigger, not scroll-linked.">Scrub</span>
         <span class="stat-value">${escapeHtml(scrubLabel)}</span>
       </div>
       ${st.pin ? `<div class="stat">
@@ -1085,7 +1094,7 @@ function renderStDetail(id) {
     }
   }
 
-  if (st.invalidateOnRefresh === false && st.scrub !== false) {
+  if (!st.invalidateOnRefresh && st.scrub !== false) {
     html += `
     <div class="lint-item lint-warning" style="margin:0">
       <div class="lint-item-header">
@@ -1398,12 +1407,15 @@ function openPropEditor(anim) {
   modal.style.display = 'flex';
 
   document.getElementById('btn-apply-props').onclick = () => {
-    const newVars = {};
+    // Start from the animation's existing vars so unchanged fields are preserved.
+    const newVars = { ...anim.vars, overwrite: true };
     editor.querySelectorAll('.prop-input').forEach((input) => {
-      if (input.value !== '') {
-        const n = parseFloat(input.value);
-        newVars[input.name] = isNaN(n) ? input.value : n;
-      }
+      if (input.value === '') return;
+      const n = parseFloat(input.value);
+      const val = isNaN(n) ? input.value : n;
+      // Reject non-finite values for numeric-only fields.
+      if ((input.name === 'duration' || input.name === 'delay') && (!isFinite(val) || val < 0)) return;
+      newVars[input.name] = val;
     });
     sendCommand({
       command: 'inject_js',
