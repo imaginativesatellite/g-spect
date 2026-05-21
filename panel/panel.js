@@ -48,9 +48,7 @@ port.onMessage.addListener((msg) => {
     case 'inspection_data':   handleInspectionData(msg.payload);  break;
     case 'gsap_not_found':    showNotFound();                      break;
     case 'inject_result':     showInjectResult(msg);               break;
-    case 'reset_complete':
-      setTimeout(() => chrome.devtools.inspectedWindow.eval('window.location.reload()'), 300);
-      break;
+    case 'reset_complete': break;
     case 'reverse_highlight':   highlightPanelRows(msg.animIds || [], msg.stIds || []); break;
     case 'reverse_unhighlight': clearPanelHighlights(); break;
     default: break;
@@ -1303,7 +1301,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     chrome.devtools.inspectedWindow.eval('window.location.href', (pageUrl) => {
       chrome.storage.local.remove(`override_${pageUrl}`, () => {
         sendCommand({ command: 'reset_all' });
-        setTimeout(() => chrome.devtools.inspectedWindow.eval('window.location.reload()'), 800);
+        setTimeout(() => chrome.devtools.inspectedWindow.reload({}), 400);
       });
     });
   }
